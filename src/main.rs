@@ -4,29 +4,53 @@ mod storage;
 use std::fs;
 use std::path::{PathBuf};
 use structopt::{StructOpt};
+use crate::compiler::parser::parse_program;
 use crate::compiler::tokenizer::tokenize;
 
 fn main() {
     let options = Options::from_args();
 
-    let mut source_code = fs::read_to_string(options.file_path).unwrap();
+    let source_code = fs::read_to_string(options.file_path).unwrap();
 
     // before tokenize should call gcc preprocessor
 
-    match tokenize(source_code.as_str()) {
+    let mut tokens = match tokenize(source_code.as_str()) {
         Ok(tokens) => {
-            println!("tokens: {:?}", tokens);
+            println!("Tokens {:?}", tokens);
+            tokens
         }
         Err(err) => panic!("{:?}", err),
-    }
+    };
 
     if options.lex {
         return
     }
-    else {
 
+    match parse_program(&mut tokens) {
+        Ok(ast) => {
+            println!("AST:\n{}", ast);
+        }
+        Err(err) => panic!("{:?}", err)
+    }
+
+    if options.parse
+    {
+        return;
+    }
+
+    if options.codegen
+    {
+        return;
+    }
+
+    if options.emit_assembly
+    {
+        return;
     }
 }
+
+
+
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "MDC", about = "My Dummy Compiler Driver")]
