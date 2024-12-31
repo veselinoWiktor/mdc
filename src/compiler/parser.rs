@@ -1,10 +1,10 @@
 use crate::compiler::token::{Token};
-use crate::storage::ast::{Program, Function, Statement, Expression};
+use crate::storage::ast::{AstProgram, AstFunctionDefinition, AstStatement, AstExpression};
 
 #[derive(Debug, PartialEq)]
 pub struct ParserErr(String);
 
-pub fn parse_program(tokens: &mut Vec<Token>) -> Result<Program, ParserErr> {
+pub fn parse_program(tokens: &mut Vec<Token>) -> Result<AstProgram, ParserErr> {
     let function = match parse_function(tokens) {
         Ok(exp) => exp,
         Err(err) => return Err(err),
@@ -14,11 +14,11 @@ pub fn parse_program(tokens: &mut Vec<Token>) -> Result<Program, ParserErr> {
         return Err(ParserErr("Syntax error!".to_string()));
     }
     else {
-        Ok(Program::ProgramNode(function))
+        Ok(AstProgram::ProgramNode(function))
     }
 }
 
-fn parse_function(tokens: &mut Vec<Token>) -> Result<Function, ParserErr> {
+fn parse_function(tokens: &mut Vec<Token>) -> Result<AstFunctionDefinition, ParserErr> {
     match expect(&Token::Integer, tokens) {
         Err(err) => return Err(err),
         _ => tokens.remove(0)
@@ -64,10 +64,10 @@ fn parse_function(tokens: &mut Vec<Token>) -> Result<Function, ParserErr> {
         _ => tokens.remove(0)
     };
 
-    Ok(Function::FunctionNode(Token::Identifier(identifier), statement))
+    Ok(AstFunctionDefinition::FunctionNode(Token::Identifier(identifier), statement))
 }
 
-fn parse_statement(tokens: &mut Vec<Token>) -> Result<Statement, ParserErr> {
+fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
     match expect(&Token::Return, tokens) {
         Ok(()) => tokens.remove(0),
         Err(err) => return Err(err),
@@ -86,12 +86,12 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Result<Statement, ParserErr> {
         _ => tokens.remove(0)
     };
 
-    Ok(Statement::ReturnNode(return_val))
+    Ok(AstStatement::ReturnNode(return_val))
 }
 
-fn parse_expression(tokens: &mut Vec<Token>) -> Result<Expression, ParserErr> {
+fn parse_expression(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
     if let Some(Token::Constant(some)) = tokens.first() {
-        Ok(Expression::ConstantNode(Token::Constant(some.clone())))
+        Ok(AstExpression::ConstantNode(Token::Constant(some.clone())))
     }
     else {
         Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Constant(0), tokens.first().unwrap())))
@@ -118,7 +118,7 @@ pub fn expect(expected: &Token, tokens: &Vec<Token>) -> Result<(), ParserErr>  {
 mod tests {
     use crate::compiler::token::Token;
     use crate::compiler::parser::{expect, parse_expression, parse_function, parse_program, parse_statement, ParserErr};
-    use crate::storage::ast::{Expression, Function, Program, Statement};
+    use crate::storage::ast::{AstExpression, AstFunctionDefinition, AstProgram, AstStatement};
 
     #[test]
     fn expect_basic_pass() {
@@ -143,13 +143,13 @@ mod tests {
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(Expression::ConstantNode(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::ConstantNode(Token::Constant(15))));
 
         let mut tokens = vec![Token::Constant(15)];
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(Expression::ConstantNode(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::ConstantNode(Token::Constant(15))));
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Ok(Statement::ReturnNode(Expression::ConstantNode(Token::Constant(2)))));
+        assert_eq!(statement, Ok(AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))));
         assert_eq!(tokens, vec![Token::CloseBrace]);
         assert_eq!(tokens.len(), 1);
     }
@@ -178,7 +178,7 @@ mod tests {
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Ok(Statement::ReturnNode(Expression::ConstantNode(Token::Constant(2)))));
+        assert_eq!(statement, Ok(AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))));
         assert_eq!(tokens.len(), 0);
         assert_eq!(tokens, vec![]);
     }
@@ -221,7 +221,7 @@ mod tests {
 
         let statement = parse_function(&mut tokens);
 
-        assert_eq!(statement, Ok(Function::FunctionNode(Token::Identifier("main".to_string()), Statement::ReturnNode(Expression::ConstantNode(Token::Constant(2))))));
+        assert_eq!(statement, Ok(AstFunctionDefinition::FunctionNode(Token::Identifier("main".to_string()), AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2))))));
         assert_eq!(tokens, vec![]);
         assert_eq!(tokens.len(), 0);
     }
@@ -270,7 +270,7 @@ mod tests {
 
         let statement = parse_program(&mut tokens);
 
-        assert_eq!(statement, Ok(Program::ProgramNode(Function::FunctionNode(Token::Identifier("main".to_string()), Statement::ReturnNode(Expression::ConstantNode(Token::Constant(2)))))));
+        assert_eq!(statement, Ok(AstProgram::ProgramNode(AstFunctionDefinition::FunctionNode(Token::Identifier("main".to_string()), AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))))));
     }
 
     #[test]

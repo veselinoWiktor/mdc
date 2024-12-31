@@ -4,6 +4,7 @@ mod storage;
 use std::fs;
 use std::path::{PathBuf};
 use structopt::{StructOpt};
+use crate::compiler::codegen::gen;
 use crate::compiler::parser::parse_program;
 use crate::compiler::tokenizer::tokenize;
 use crate::storage::ast::PrettyFormatter;
@@ -27,17 +28,21 @@ fn main() {
         return
     }
 
-    match parse_program(&mut tokens) {
+    let ast = match parse_program(&mut tokens) {
         Ok(ast) => {
             println!("AST:\n{}", ast.pretty_format(0));
+            ast
         }
         Err(err) => panic!("{:?}", err)
-    }
+    };
 
     if options.parse
     {
         return;
     }
+
+    let assembly_ast = gen(ast);
+    println!("Assembly AST:\n{:?}", assembly_ast);
 
     if options.codegen
     {
