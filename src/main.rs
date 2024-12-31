@@ -6,6 +6,7 @@ use std::path::{PathBuf};
 use structopt::{StructOpt};
 use crate::compiler::parser::parse_program;
 use crate::compiler::tokenizer::tokenize;
+use crate::storage::ast::PrettyFormatter;
 
 fn main() {
     let options = Options::from_args();
@@ -28,7 +29,7 @@ fn main() {
 
     match parse_program(&mut tokens) {
         Ok(ast) => {
-            println!("AST:\n{}", ast);
+            println!("AST:\n{}", ast.pretty_format(0));
         }
         Err(err) => panic!("{:?}", err)
     }
