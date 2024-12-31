@@ -79,6 +79,11 @@ pub fn tokenize(mut input: &str) -> Result<Vec<Token>, TokenizeError> {
             input = &input[ws_len..];
         }
 
+        // if file ends with whitespaces we should break here
+        if input.is_empty() {
+            break;
+        }
+
         // try to match tokens
         let matches: Vec<_> = token_defs
             .iter()
