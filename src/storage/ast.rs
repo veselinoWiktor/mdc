@@ -1,13 +1,24 @@
 use std::fmt::{Display, Formatter};
 use crate::compiler::token::Token;
 
+/// # Grammar
+/// ```
+/// <program> ::= <function>
+/// <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
+/// <statement> ::= "return" <exp> ";"
+/// <exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
+/// <unop> ::= "-" | "~"
+/// <identifier> ::= ? An identifier token ?
+/// <int> ::= ? A constant token ?
+/// ```
+
 pub trait PrettyFormatter {
     fn pretty_format(&self, indent: usize) -> String;
 }
 
 #[derive(Debug, PartialEq)]
 pub enum AstProgram {
-    ProgramNode(AstFunctionDefinition)
+    Program(AstFunctionDefinition)
 }
 
 impl PrettyFormatter for AstProgram {
@@ -16,7 +27,7 @@ impl PrettyFormatter for AstProgram {
         result.push_str(&" ".repeat(indent));
         result.push_str("Program(\n");
         match self {
-            AstProgram::ProgramNode(function) => {
+            AstProgram::Program(function) => {
                 result.push_str(function.pretty_format(indent + 4).as_str());
                 result.push_str("\n");
             }
@@ -30,14 +41,14 @@ impl PrettyFormatter for AstProgram {
 impl Display for AstProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstProgram::ProgramNode(function) => write!(f, "Program(\n{}\n)", function.to_string()),
+            AstProgram::Program(function) => write!(f, "Program(\n{}\n)", function.to_string()),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum AstFunctionDefinition {
-    FunctionNode(Token, AstStatement)
+    Function(Token, AstStatement)
 }
 
 impl PrettyFormatter for AstFunctionDefinition {
@@ -46,7 +57,7 @@ impl PrettyFormatter for AstFunctionDefinition {
         result.push_str(&" ".repeat(indent));
         result.push_str("Function(\n");
         match self {
-            AstFunctionDefinition::FunctionNode(Token::Identifier(identifier), statement) => {
+            AstFunctionDefinition::Function(Token::Identifier(identifier), statement) => {
                 result.push_str(&" ".repeat(indent + 4));
                 result.push_str(format!("name=\"{}\"\n", identifier).as_str());
                 result.push_str(&" ".repeat(indent + 4));
@@ -65,7 +76,7 @@ impl PrettyFormatter for AstFunctionDefinition {
 impl Display for AstFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstFunctionDefinition::FunctionNode(Token::Identifier(identifier), statement) => {
+            AstFunctionDefinition::Function(Token::Identifier(identifier), statement) => {
                 write!(f, "\tFunction(\n\t\tname=\"{}\",\n\t\tbody={}\n\t)", identifier.clone(), statement.to_string())
             },
             _ => unreachable!()
@@ -75,14 +86,14 @@ impl Display for AstFunctionDefinition {
 
 #[derive(Debug, PartialEq)]
 pub enum AstStatement {
-    ReturnNode(AstExpression)
+    Return(AstExpression)
 }
 
 impl PrettyFormatter for AstStatement {
     fn pretty_format(&self, indent: usize) -> String {
         let mut result = String::new();
         match self {
-            AstStatement::ReturnNode(expression) => {
+            AstStatement::Return(expression) => {
                 result.push_str("Return(\n");
                 result.push_str(expression.pretty_format(indent + 4).as_str());
                 result.push_str("\n");
@@ -97,7 +108,7 @@ impl PrettyFormatter for AstStatement {
 impl Display for AstStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstStatement::ReturnNode(expression) => {
+            AstStatement::Return(expression) => {
                 write!(f, "Return(\n{}\n\t\t)", expression.to_string())
             }
         }
@@ -106,7 +117,8 @@ impl Display for AstStatement {
 
 #[derive(Debug, PartialEq)]
 pub enum AstExpression {
-    ConstantNode(Token)
+    Constant(Token),
+    Unary(AstUnaryOp, Box<AstExpression>)
 }
 
 impl PrettyFormatter for AstExpression {
@@ -114,7 +126,7 @@ impl PrettyFormatter for AstExpression {
         let mut result = String::new();
         result.push_str(&" ".repeat(indent));
         match self {
-            AstExpression::ConstantNode(Token::Constant(num)) => {
+            AstExpression::Constant(Token::Constant(num)) => {
                 result.push_str(format!("Constant({})", num).as_str());
             }
             _ => unreachable!()
@@ -127,7 +139,7 @@ impl PrettyFormatter for AstExpression {
 impl Display for AstExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstExpression::ConstantNode(Token::Constant(num)) => {
+            AstExpression::Constant(Token::Constant(num)) => {
                 write!(f, "\t\t\tConstant({})", num.to_string())
             },
             _ => unreachable!()
@@ -135,3 +147,8 @@ impl Display for AstExpression {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum AstUnaryOp{
+    Complement,
+    Negate
+}

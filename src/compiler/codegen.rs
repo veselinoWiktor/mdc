@@ -4,7 +4,7 @@ use crate::storage::assembly::{AssemblyFunctionDefinition, AssemblyInstruction, 
 
 pub fn gen(program: AstProgram) -> AssemblyProgram {
     match program {
-        AstProgram::ProgramNode(function) => {
+        AstProgram::Program(function) => {
             AssemblyProgram::Program(convert_function(function))
         }
     }
@@ -12,7 +12,7 @@ pub fn gen(program: AstProgram) -> AssemblyProgram {
 
 fn convert_function(function: AstFunctionDefinition) -> AssemblyFunctionDefinition {
     match function {
-        AstFunctionDefinition::FunctionNode(Token::Identifier(name), statement) => {
+        AstFunctionDefinition::Function(Token::Identifier(name), statement) => {
             AssemblyFunctionDefinition::Function(name, convert_statement(statement))
         }
         _ => unreachable!()
@@ -22,7 +22,7 @@ fn convert_function(function: AstFunctionDefinition) -> AssemblyFunctionDefiniti
 fn convert_statement (statement: AstStatement) -> Vec<AssemblyInstruction>
 {
     match statement {
-        AstStatement::ReturnNode(expr) => {
+        AstStatement::Return(expr) => {
             let v = convert_exp(expr);
             vec![AssemblyInstruction::Mov(v, AssemblyOperand::Register()), AssemblyInstruction::Ret]
         }
@@ -32,7 +32,7 @@ fn convert_statement (statement: AstStatement) -> Vec<AssemblyInstruction>
 fn convert_exp(expr: AstExpression) -> AssemblyOperand
 {
     match expr {
-        AstExpression::ConstantNode(Token::Constant(num)) => {
+        AstExpression::Constant(Token::Constant(num)) => {
             AssemblyOperand::Imm(num)
         }
         _ => unreachable!()

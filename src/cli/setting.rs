@@ -32,6 +32,13 @@ pub struct Settings {
     )]
     pub emit_assembly: bool,
 
+    #[structopt(
+        short = "t",
+        long = "tacky",
+        help = "Directs it to emit only an assembly file, but not assemble or link it"
+    )]
+    pub tacky: bool,
+
     #[structopt(parse(from_os_str))]
     pub file_path: PathBuf,
 }

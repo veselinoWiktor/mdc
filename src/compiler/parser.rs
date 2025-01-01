@@ -1,5 +1,7 @@
-use crate::compiler::token::{Token};
-use crate::storage::ast::{AstProgram, AstFunctionDefinition, AstStatement, AstExpression};
+use crate::compiler::token::Token;
+use crate::storage::ast::{
+    AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct ParserErr(String);
@@ -12,59 +14,48 @@ pub fn parse_program(tokens: &mut Vec<Token>) -> Result<AstProgram, ParserErr> {
 
     if tokens.len() != 0 {
         return Err(ParserErr("Syntax error!".to_string()));
-    }
-    else {
-        Ok(AstProgram::ProgramNode(function))
+    } else {
+        Ok(AstProgram::Program(function))
     }
 }
 
 fn parse_function(tokens: &mut Vec<Token>) -> Result<AstFunctionDefinition, ParserErr> {
-    match expect(&Token::Integer, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
+    expect(&Token::Integer, tokens)?;
+    tokens.remove(0);
 
     let identifier = if let Some(Token::Identifier(identifier_name)) = tokens.first() {
         identifier_name.clone()
-    }
-    else {
-        return Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Identifier(String::new()), tokens.first().unwrap())))
+    } else {
+        return Err(ParserErr(format!(
+            "expected {:?}, got {:?}",
+            &Token::Identifier(String::new()),
+            tokens.first().unwrap()
+        )));
     };
-
     tokens.remove(0);
 
-
-    match expect(&Token::OpenParen, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
-
-    match expect(&Token::Void, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
-
-    match expect(&Token::CloseParen, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
-
-    match expect(&Token::OpenBrace, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
+    expect_sequence_with_remove(
+        &vec![
+            Token::OpenParen,
+            Token::Void,
+            Token::CloseParen,
+            Token::OpenBrace,
+        ],
+        tokens,
+    )?;
 
     let statement = match parse_statement(tokens) {
         Ok(exp) => exp,
         Err(err) => return Err(err),
     };
 
-    match expect(&Token::CloseBrace, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0)
-    };
+    expect(&Token::CloseBrace, tokens)?;
+    tokens.remove(0);
 
-    Ok(AstFunctionDefinition::FunctionNode(Token::Identifier(identifier), statement))
+    Ok(AstFunctionDefinition::Function(
+        Token::Identifier(identifier),
+        statement,
+    ))
 }
 
 fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
@@ -77,47 +68,101 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
         Ok(exp) => {
             tokens.remove(0);
             exp
-        },
+        }
         Err(err) => return Err(err),
     };
 
     match expect(&Token::Semicolon, tokens) {
         Err(err) => return Err(err),
-        _ => tokens.remove(0)
+        _ => tokens.remove(0),
     };
 
-    Ok(AstStatement::ReturnNode(return_val))
+    Ok(AstStatement::Return(return_val))
 }
 
+/// ```<exp> ::= <int> | <unop> <exp> | "(" <exp> ")"```
 fn parse_expression(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
-    if let Some(Token::Constant(some)) = tokens.first() {
-        Ok(AstExpression::ConstantNode(Token::Constant(some.clone())))
-    }
-    else {
-        Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Constant(0), tokens.first().unwrap())))
+    match tokens.first() {
+        Some(token) => match token {
+            Token::Constant(num) => Ok(AstExpression::Constant(Token::Constant(num.clone()))),
+            Token::Tilde | Token::Hyphen => {
+                let operator = parse_unary_operator(tokens)?;
+                tokens.remove(0);
+                let inner_expr = parse_expression(tokens)?;
+                Ok(AstExpression::Unary(operator, Box::new(inner_expr)))
+            }
+            Token::OpenParen => {
+                tokens.remove(0);
+                let inner_expr = parse_expression(tokens)?;
+                tokens.remove(0);
+                expect(&Token::CloseParen, tokens)?;
+
+                Ok(inner_expr)
+            }
+            _ => Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                &Token::Constant(0),
+                tokens.first().unwrap()
+            ))),
+        },
+        None => Err(ParserErr("No more tokens".to_string())),
     }
 }
 
-pub fn expect(expected: &Token, tokens: &Vec<Token>) -> Result<(), ParserErr>  {
+fn parse_unary_operator(tokens: &mut Vec<Token>) -> Result<AstUnaryOp, ParserErr> {
+    match tokens.first() {
+        Some(token) => match token {
+            Token::Tilde => Ok(AstUnaryOp::Complement),
+            Token::Hyphen => Ok(AstUnaryOp::Negate),
+            _ => Err(ParserErr(format!(
+                "expected token signifying unary operation, got {:?}",
+                tokens.first().unwrap()
+            ))),
+        },
+        None => Err(ParserErr("No more tokens".to_string())),
+    }
+}
+
+pub fn expect(expected: &Token, tokens: &Vec<Token>) -> Result<(), ParserErr> {
     let actual = tokens.first().unwrap();
 
     match (expected, actual) {
         (Token::Identifier(_), Token::Identifier(_)) => Ok(()),
         (Token::Constant(_), Token::Constant(_)) => Ok(()),
-        _ => {
-            match expected == actual
-            {
-                true => Ok(()),
-                false => Err(ParserErr(format!("expected {:?}, got {:?}", expected, actual))),
-            }
-        }
+        _ => match expected == actual {
+            true => Ok(()),
+            false => Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                expected, actual
+            ))),
+        },
     }
+}
+
+pub fn expect_sequence(expected: &Vec<Token>, tokens: &Vec<Token>) -> Result<(), ParserErr> {
+    for token in expected {
+        expect(token, tokens)?;
+    }
+    Ok(())
+}
+
+pub fn expect_sequence_with_remove(
+    expected: &Vec<Token>,
+    tokens: &mut Vec<Token>,
+) -> Result<(), ParserErr> {
+    for token in expected {
+        expect(token, tokens)?;
+        tokens.remove(0);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::compiler::parser::{
+        expect, parse_expression, parse_function, parse_program, parse_statement, ParserErr,
+    };
     use crate::compiler::token::Token;
-    use crate::compiler::parser::{expect, parse_expression, parse_function, parse_program, parse_statement, ParserErr};
     use crate::storage::ast::{AstExpression, AstFunctionDefinition, AstProgram, AstStatement};
 
     #[test]
@@ -133,8 +178,14 @@ mod tests {
         let tokens = vec![Token::Constant(15)];
 
         let expected = &Token::Identifier("main".to_string());
-        assert_eq!(expect(expected, &tokens),
-                   Err(ParserErr(format!("expected {:?}, got {:?}", expected, tokens.first().unwrap()))));
+        assert_eq!(
+            expect(expected, &tokens),
+            Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                expected,
+                tokens.first().unwrap()
+            )))
+        );
     }
 
     #[test]
@@ -143,13 +194,13 @@ mod tests {
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(AstExpression::ConstantNode(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::Constant(Token::Constant(15))));
 
         let mut tokens = vec![Token::Constant(15)];
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(AstExpression::ConstantNode(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::Constant(Token::Constant(15))));
     }
 
     #[test]
@@ -158,16 +209,33 @@ mod tests {
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Constant(0), tokens.first().unwrap()))));
+        assert_eq!(
+            expr,
+            Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                &Token::Constant(0),
+                tokens.first().unwrap()
+            )))
+        );
     }
 
     #[test]
     fn parse_statement_pass_with_left_tokens() {
-        let mut tokens = vec![Token::Return, Token::Constant(2), Token::Semicolon, Token::CloseBrace];
+        let mut tokens = vec![
+            Token::Return,
+            Token::Constant(2),
+            Token::Semicolon,
+            Token::CloseBrace,
+        ];
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Ok(AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))));
+        assert_eq!(
+            statement,
+            Ok(AstStatement::Return(AstExpression::Constant(
+                Token::Constant(2)
+            )))
+        );
         assert_eq!(tokens, vec![Token::CloseBrace]);
         assert_eq!(tokens.len(), 1);
     }
@@ -178,7 +246,12 @@ mod tests {
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Ok(AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))));
+        assert_eq!(
+            statement,
+            Ok(AstStatement::Return(AstExpression::Constant(
+                Token::Constant(2)
+            )))
+        );
         assert_eq!(tokens.len(), 0);
         assert_eq!(tokens, vec![]);
     }
@@ -189,19 +262,43 @@ mod tests {
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Return, tokens.first().unwrap()))));
-        assert_eq!(tokens, vec![Token::Integer, Token::Constant(2), Token::Semicolon]);
+        assert_eq!(
+            statement,
+            Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                &Token::Return,
+                tokens.first().unwrap()
+            )))
+        );
+        assert_eq!(
+            tokens,
+            vec![Token::Integer, Token::Constant(2), Token::Semicolon]
+        );
         assert_eq!(tokens.len(), 3);
     }
 
     #[test]
     fn parse_statement_fail_with_incorrect_token() {
-        let mut tokens = vec![Token::Return, Token::Identifier("main".to_string()), Token::Semicolon];
+        let mut tokens = vec![
+            Token::Return,
+            Token::Identifier("main".to_string()),
+            Token::Semicolon,
+        ];
 
         let statement = parse_statement(&mut tokens);
 
-        assert_eq!(statement, Err(ParserErr(format!("expected {:?}, got {:?}", &Token::Constant(0), tokens.first().unwrap()))));
-        assert_eq!(tokens, vec![Token::Identifier("main".to_string()), Token::Semicolon]);
+        assert_eq!(
+            statement,
+            Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                &Token::Constant(0),
+                tokens.first().unwrap()
+            )))
+        );
+        assert_eq!(
+            tokens,
+            vec![Token::Identifier("main".to_string()), Token::Semicolon]
+        );
         assert_eq!(tokens.len(), 2);
     }
 
@@ -217,11 +314,18 @@ mod tests {
             Token::Return,
             Token::Constant(2),
             Token::Semicolon,
-            Token::CloseBrace];
+            Token::CloseBrace,
+        ];
 
         let statement = parse_function(&mut tokens);
 
-        assert_eq!(statement, Ok(AstFunctionDefinition::FunctionNode(Token::Identifier("main".to_string()), AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2))))));
+        assert_eq!(
+            statement,
+            Ok(AstFunctionDefinition::Function(
+                Token::Identifier("main".to_string()),
+                AstStatement::Return(AstExpression::Constant(Token::Constant(2)))
+            ))
+        );
         assert_eq!(tokens, vec![]);
         assert_eq!(tokens.len(), 0);
     }
@@ -237,20 +341,31 @@ mod tests {
             Token::Return,
             Token::Constant(2),
             Token::Semicolon,
-            Token::CloseBrace];
+            Token::CloseBrace,
+        ];
 
         let statement = parse_function(&mut tokens);
 
-        assert_eq!(statement, Err(ParserErr(format!("expected {:?}, got {:?}", &Token::OpenParen, tokens.first().unwrap()))));
-        assert_eq!(tokens, vec![
-            Token::Void,
-            Token::CloseParen,
-            Token::OpenBrace,
-            Token::Return,
-            Token::Constant(2),
-            Token::Semicolon,
-            Token::CloseBrace
-        ]);
+        assert_eq!(
+            statement,
+            Err(ParserErr(format!(
+                "expected {:?}, got {:?}",
+                &Token::OpenParen,
+                tokens.first().unwrap()
+            )))
+        );
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(2),
+                Token::Semicolon,
+                Token::CloseBrace
+            ]
+        );
         assert_eq!(tokens.len(), 7);
     }
 
@@ -266,11 +381,20 @@ mod tests {
             Token::Return,
             Token::Constant(2),
             Token::Semicolon,
-            Token::CloseBrace];
+            Token::CloseBrace,
+        ];
 
         let statement = parse_program(&mut tokens);
 
-        assert_eq!(statement, Ok(AstProgram::ProgramNode(AstFunctionDefinition::FunctionNode(Token::Identifier("main".to_string()), AstStatement::ReturnNode(AstExpression::ConstantNode(Token::Constant(2)))))));
+        assert_eq!(
+            statement,
+            Ok(AstProgram::Program(
+                AstFunctionDefinition::Function(
+                    Token::Identifier("main".to_string()),
+                    AstStatement::Return(AstExpression::Constant(Token::Constant(2)))
+                )
+            ))
+        );
     }
 
     #[test]
@@ -286,7 +410,8 @@ mod tests {
             Token::Constant(2),
             Token::Semicolon,
             Token::CloseBrace,
-            Token::CloseBrace];
+            Token::CloseBrace,
+        ];
 
         let statement = parse_program(&mut tokens);
 
