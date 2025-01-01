@@ -44,6 +44,9 @@ fn token_definitions() -> Vec<TokenDef> {
         TokenDef::new(r"\{", Box::new(|_| Token::OpenBrace)),
         TokenDef::new(r"\}", Box::new(|_| Token::CloseBrace)),
         TokenDef::new(r";", Box::new(|_| Token::Semicolon)),
+        TokenDef::new(r"-", Box::new(|_| Token::Hyphen)),
+        TokenDef::new(r"--", Box::new(|_| Token::DoubleHyphen)),
+        TokenDef::new(r"~", Box::new(|_| Token::Tilde)),
     ]
 }
 
@@ -144,5 +147,20 @@ mod tests {
         }";
 
         assert_eq!(tokenize(code).unwrap_err(), TokenizeError("Unable to find match".to_string()));
+    }
+
+    #[test]
+    fn recognises_hyphen() {
+        assert_eq!(tokenize("-5").unwrap(), vec![Token::Hyphen, Token::Constant(5)]);
+    }
+
+    #[test]
+    fn recognises_double_hyphen() {
+        assert_eq!(tokenize("--5").unwrap(), vec![Token::DoubleHyphen, Token::Constant(5)]);
+    }
+
+    #[test]
+    fn recognises_tilde() {
+        assert_eq!(tokenize("-(~5)").unwrap(), vec![Token::Hyphen, Token::OpenParen, Token::Tilde, Token::Constant(5), Token::CloseParen]);
     }
 }
