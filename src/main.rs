@@ -14,7 +14,6 @@ use crate::compiler::emit::emit_assembly;
 use crate::compiler::parser::parse_program;
 use crate::compiler::tackygen::emit_tacky;
 use crate::compiler::tokenizer::tokenize;
-use crate::storage::ast::PrettyFormatter;
 
 fn main() {
     let mut options = Settings::from_args();
@@ -72,9 +71,9 @@ fn main() {
         return;
     }
 
-    // let assembly_source_code = emit_assembly(assembly_ast);
-    // options.file_path.set_extension("s");
-    // fs::write(&options.file_path, &assembly_source_code).unwrap();
+    let assembly_source_code = emit_assembly(fixup_ast);
+    options.file_path.set_extension("s");
+    fs::write(&options.file_path, &assembly_source_code).unwrap();
 
     if options.emit_assembly
     {
@@ -101,8 +100,7 @@ fn call_gcc_preprocessor(file_path: &mut PathBuf) {
             .status();
 
     match preprocessor_command {
-        Ok(status) => {}
-        Err(error) => {}
+        _ => ()
     }
 }
 

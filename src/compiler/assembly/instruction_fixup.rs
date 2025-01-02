@@ -1,7 +1,6 @@
 //! Invalid instructions fix-up
 
 use crate::storage::assembly::{AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister};
-use crate::storage::assembly::AssemblyInstruction::AllocateStack;
 
 pub fn fixup_program(last_stack_slot: i32, program: AssemblyProgram) -> AssemblyProgram {
     match program {

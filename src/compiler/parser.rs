@@ -139,12 +139,12 @@ pub fn expect(expected: &Token, tokens: &Vec<Token>) -> Result<(), ParserErr> {
     }
 }
 
-pub fn expect_sequence(expected: &Vec<Token>, tokens: &Vec<Token>) -> Result<(), ParserErr> {
-    for token in expected {
-        expect(token, tokens)?;
-    }
-    Ok(())
-}
+// pub fn expect_sequence(expected: &Vec<Token>, tokens: &Vec<Token>) -> Result<(), ParserErr> {
+//     for token in expected {
+//         expect(token, tokens)?;
+//     }
+//     Ok(())
+// }
 
 pub fn expect_sequence_with_remove(
     expected: &Vec<Token>,

@@ -1,7 +1,5 @@
 //! Converting TACKY to assembly
 
-use crate::compiler::token::Token;
-use crate::storage::ast::{AstExpression};
 use crate::storage::assembly::{AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister, AssemblyUnaryOp};
 use crate::storage::tacky::{FunctionDefinition, Instruction, Program, UnaryOp, Val};
 
@@ -24,7 +22,6 @@ fn convert_function(function: FunctionDefinition) -> AssemblyFunctionDefinition 
 
             AssemblyFunctionDefinition::Function(name, res)
         }
-        _ => unreachable!()
     }
 }
 
@@ -32,7 +29,8 @@ fn convert_instruction(instruction: Instruction) -> Vec<AssemblyInstruction>
 {
     match instruction {
         Instruction::Return(val) => {
-            vec![AssemblyInstruction::Mov(convert_operand(val), AssemblyOperand::Reg(AssemblyRegister::AX))]
+            vec![AssemblyInstruction::Mov(convert_operand(val), AssemblyOperand::Reg(AssemblyRegister::AX)),
+                 AssemblyInstruction::Ret]
         }
         Instruction::Unary(un_op, src, dst) => {
             vec![AssemblyInstruction::Mov(convert_operand(src), convert_operand(dst.clone())),
@@ -52,15 +50,5 @@ fn convert_operand(operator: Val) -> AssemblyOperand {
     match operator {
         Val::Constant(num) => AssemblyOperand::Imm(num),
         Val::Var(name) => AssemblyOperand::PseudoReg(name)
-    }
-}
-
-fn convert_exp(expr: AstExpression) -> AssemblyOperand
-{
-    match expr {
-        AstExpression::Constant(Token::Constant(num)) => {
-            AssemblyOperand::Imm(num)
-        }
-        _ => unreachable!()
     }
 }
