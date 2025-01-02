@@ -18,5 +18,10 @@ pub enum Token {
     Semicolon,
     Hyphen,
     DoubleHyphen,
-    Tilde
+    Tilde,
+    Plus,
+    DoublePlus,
+    Asterisk,
+    ForwardSlash,
+    Percent,
 }

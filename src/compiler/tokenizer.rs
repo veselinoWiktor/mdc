@@ -5,6 +5,7 @@ use regex::{Regex};
 use super::token::{Token};
 
 struct TokenDef {
+    pattern: String,
     regex: Regex,
     converter: Box<dyn Fn(&str) -> Token>,
 }
@@ -15,6 +16,7 @@ pub struct TokenizeError(String);
 impl TokenDef {
     fn new(pattern: &str, converter: Box<dyn Fn(&str) -> Token>) -> Self {
         TokenDef {
+            pattern: pattern.to_string(),
             regex: Regex::new(&format!("^{}", pattern)).unwrap(),
             converter,
         }
@@ -47,6 +49,11 @@ fn token_definitions() -> Vec<TokenDef> {
         TokenDef::new(r"-", Box::new(|_| Token::Hyphen)),
         TokenDef::new(r"--", Box::new(|_| Token::DoubleHyphen)),
         TokenDef::new(r"~", Box::new(|_| Token::Tilde)),
+        TokenDef::new(r"\+", Box::new(|_| Token::Plus)),
+        TokenDef::new(r"\+\+", Box::new(|_| Token::DoublePlus)),
+        TokenDef::new(r"\*", Box::new(|_| Token::Asterisk)),
+        TokenDef::new(r"/", Box::new(|_| Token::ForwardSlash)),
+        TokenDef::new(r"%", Box::new(|_| Token::Percent)),
     ]
 }
 
