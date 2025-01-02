@@ -34,12 +34,14 @@ fn emit_instruction(instruction: AssemblyInstruction) -> String {
             => format!("\tmovl {}, {}\n", emit_operand(src), emit_operand(dest)),
         AssemblyInstruction::Ret
             => "\tret\n".to_string(),
+        _ => todo!()
     }
 }
 
 fn emit_operand(operand: AssemblyOperand) -> String {
     match operand {
-        AssemblyOperand::Register() => "%eax".to_string(),
-        AssemblyOperand::Imm(num) => format!("${}", num.to_string())
+        AssemblyOperand::Reg(_) => "%eax".to_string(),
+        AssemblyOperand::Imm(num) => format!("${}", num.to_string()),
+        _ => todo!()
     }
 }

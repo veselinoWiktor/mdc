@@ -71,6 +71,6 @@ mod tests {
     fn basic_test() {
         let res = AstStatement::Return(AstExpression::Unary(AstUnaryOp::Negate, Box::new(AstExpression::Unary(AstUnaryOp::Complement, Box::new(AstExpression::Constant(Token::Constant(100)))))));
 
-        assert_eq!(emit_tacky_statement(res), vec![Instruction::Unary(UnaryOp::Complement, Val::Constant(100), Val::Var("tmp.0".to_string())), Instruction::Unary(UnaryOp::Negate, Val::Var("tmp.0".to_string()), Val::Var("tmp.1".to_string())), Instruction::Return(Val::Var("tmp.1".to_string()))]);
+        assert_eq!(emit_tacky_statement(res), vec![AstStatement::Unary(UnaryOp::Complement, Val::Constant(100), Val::Var("tmp.0".to_string())), AstStatement::Unary(UnaryOp::Negate, Val::Var("tmp.0".to_string()), Val::Var("tmp.1".to_string())), AstStatement::Return(Val::Var("tmp.1".to_string()))]);
     }
 }
