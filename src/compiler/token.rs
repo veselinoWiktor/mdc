@@ -24,4 +24,14 @@ pub enum Token {
     Asterisk,
     ForwardSlash,
     Percent,
+    // Logical tokens
+    LogicalNot,
+    LogicalAnd,
+    LogicalOr,
+    LogicalEqual,
+    LogicalNotEqual,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
 }

@@ -54,6 +54,15 @@ fn token_definitions() -> Vec<TokenDef> {
         TokenDef::new(r"\*", Box::new(|_| Token::Asterisk)),
         TokenDef::new(r"/", Box::new(|_| Token::ForwardSlash)),
         TokenDef::new(r"%", Box::new(|_| Token::Percent)),
+        TokenDef::new(r"!", Box::new(|_| Token::LogicalNot)),
+        TokenDef::new(r"&&", Box::new(|_| Token::LogicalAnd)),
+        TokenDef::new(r"\|\|", Box::new(|_| Token::LogicalOr)),
+        TokenDef::new(r"==", Box::new(|_| Token::LogicalEqual)),
+        TokenDef::new(r"!=", Box::new(|_| Token::LogicalNotEqual)),
+        TokenDef::new(r"<", Box::new(|_| Token::LessThan)),
+        TokenDef::new(r">", Box::new(|_| Token::GreaterThan)),
+        TokenDef::new(r"<=", Box::new(|_| Token::LessThanEqual)),
+        TokenDef::new(r">=", Box::new(|_| Token::GreaterThanEqual)),
     ]
 }
 
