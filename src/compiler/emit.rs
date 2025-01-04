@@ -59,7 +59,6 @@ fn emit_instruction(instruction: AssemblyInstruction) -> String {
         AssemblyInstruction::AllocateStack(num) => {
             result.push_str(format!("\tsubq\t${}, %rsp\n", num).as_str());
         }
-        _ => todo!()
     }
 
     result

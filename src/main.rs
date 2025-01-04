@@ -1,19 +1,19 @@
+mod cli;
 mod compiler;
 mod storage;
-mod cli;
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use structopt::{StructOpt};
 use crate::cli::setting::Settings;
-use compiler::assembly::codegen::gen;
 use crate::compiler::assembly::instruction_fixup::fixup_program;
 use crate::compiler::assembly::replace_pseudos::replace_pseudos;
 use crate::compiler::emit::emit_assembly;
 use crate::compiler::parser::parse_program;
 use crate::compiler::tackygen::emit_tacky;
 use crate::compiler::tokenizer::tokenize;
+use compiler::assembly::codegen::gen;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use structopt::StructOpt;
 
 fn main() {
     production_config()
@@ -30,13 +30,13 @@ fn debug_config() {
         }
         Err(err) => panic!("{:?}", err),
     };
-    
+
     let ast = match parse_program(&mut tokens) {
         Ok(ast) => {
             println!("AST:\n{:?}", ast);
             ast
         }
-        Err(err) => panic!("{:?}", err)
+        Err(err) => panic!("{:?}", err),
     };
 
     let tacky_ast = emit_tacky(ast);
@@ -49,7 +49,7 @@ fn production_config() {
     call_gcc_preprocessor(&mut options.file_path);
 
     let source_code = fs::read_to_string(&options.file_path).unwrap();
-    println!("{}", source_code);
+    // println!("{}", source_code);
 
     let mut tokens = match tokenize(source_code.as_str()) {
         Ok(tokens) => {
@@ -60,27 +60,25 @@ fn production_config() {
     };
 
     if options.lex {
-        return
+        return;
     }
 
     let ast = match parse_program(&mut tokens) {
         Ok(ast) => {
-            println!("AST:\n{:?}", ast);
+            // println!("AST:\n{:?}", ast);
             ast
         }
-        Err(err) => panic!("{:?}", err)
+        Err(err) => panic!("{:?}", err),
     };
 
-    if options.parse
-    {
+    if options.parse {
         return;
     }
 
     let tacky_ast = emit_tacky(ast);
-    println!("TACKY AST:\n{:?}", tacky_ast);
+    // println!("TACKY AST:\n{:?}", tacky_ast);
 
-    if options.tacky
-    {
+    if options.tacky {
         return;
     }
 
@@ -93,8 +91,7 @@ fn production_config() {
     let fixup_ast = fixup_program(replace_pseudos_ast.1, replace_pseudos_ast.0);
     println!("Replace pseudos AST:\n{:?}", fixup_ast);
 
-    if options.codegen
-    {
+    if options.codegen {
         return;
     }
 
@@ -105,8 +102,7 @@ fn production_config() {
     options.file_path.set_extension("i");
     remove_preprocessed_file(&options.file_path);
 
-    if options.emit_assembly
-    {
+    if options.emit_assembly {
         return;
     }
 
@@ -118,33 +114,29 @@ fn call_gcc_preprocessor(file_path: &mut PathBuf) {
     let binding = file_path.clone();
     let original_file_path = match binding.to_str() {
         Some(file_path) => file_path,
-        None => unreachable!()
+        None => unreachable!(),
     };
 
     file_path.set_extension("i");
 
-    let preprocessor_command =
-        Command::new("gcc")
-            .arg("-E")
-            .arg("-P")
-            .arg(original_file_path)
-            .arg("-o")
-            .arg(file_path)
-            .status();
+    let preprocessor_command = Command::new("gcc")
+        .arg("-E")
+        .arg("-P")
+        .arg(original_file_path)
+        .arg("-o")
+        .arg(file_path)
+        .status();
 
     match preprocessor_command {
-        _ => ()
+        _ => (),
     }
 }
 
 fn remove_preprocessed_file(file_path: &PathBuf) {
-    let result =
-        Command::new("rm")
-            .arg(file_path)
-            .status();
+    let result = Command::new("rm").arg(file_path).status();
 
     match result {
-        _ => ()
+        _ => (),
     }
 }
 
@@ -152,23 +144,18 @@ fn call_gcc_assembler_and_linker(file_path: &mut PathBuf) {
     let binding = file_path.clone();
     let original_file_path = match binding.to_str() {
         Some(file_path) => file_path,
-        None => unreachable!()
+        None => unreachable!(),
     };
 
     file_path.set_extension("");
 
-
-    let result =
-        Command::new("gcc")
-            .arg(&original_file_path)
-            .arg("-o")
-            .arg(file_path)
-            .status();
+    let result = Command::new("gcc")
+        .arg(&original_file_path)
+        .arg("-o")
+        .arg(file_path)
+        .status();
 
     match result {
-        _ => ()
+        _ => (),
     }
 }
-
-
-

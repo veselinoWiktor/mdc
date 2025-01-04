@@ -150,13 +150,6 @@ impl Display for AstExpression {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum AstFactor {
-    Constant(i32),
-    Unary(AstUnaryOp, Box<AstFactor>),
-    Expression(AstExpression)
-}
-
-#[derive(Debug, PartialEq)]
 pub enum AstUnaryOp{
     Complement,
     Negate
