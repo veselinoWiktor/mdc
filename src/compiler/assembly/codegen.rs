@@ -52,14 +52,15 @@ fn convert_instruction(instruction: Instruction) -> Vec<AssemblyInstruction>
             vec![AssemblyInstruction::Mov(convert_operand(src1), convert_operand(dst.clone())),
                  AssemblyInstruction::Binary(convert_binary_op(bin_op), convert_operand(src2), convert_operand(dst))]
         },
-
+        _ => todo!()
     }
 }
 
 fn convert_unary_op(un_op: UnaryOp) -> AssemblyUnaryOp {
     match un_op {
         UnaryOp::Complement => AssemblyUnaryOp::Not,
-        UnaryOp::Negate => AssemblyUnaryOp::Neg
+        UnaryOp::Negate => AssemblyUnaryOp::Neg,
+        _ => todo!()
     }
 }
 

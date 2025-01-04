@@ -26,15 +26,25 @@ pub enum FunctionDefinition {
 
 /// ```
 /// instruction = Return(val)
-///  | Unary(unary_operator, val src, val dst)
-///  | Binary(binary_operator, val src1, val src2, val dst)
+///             | Unary(unary_operator, val src, val dst)
+///             | Binary(binary_operator, val src1, val src2, val dst)
+///             | Copy(val src, val dst)
+///             | Jump(identifier target)
+///             | JumpIfZero(val condition, identifier target)
+///             | JumpIfNotZero(val condition, identifier target)
+///             | Label(identifier)
 /// ```
 /// `dst` should be Val::Var
 #[derive(Debug, PartialEq, Clone)]
 pub enum Instruction {
     Return(Val),
     Unary(UnaryOp, Val, Val),
-    Binary(BinaryOp, Val, Val, Val)
+    Binary(BinaryOp, Val, Val, Val),
+    Copy(Val, Val),
+    Jump(String),
+    JumpIfZero(Val, String),
+    JumpIfNotZero(Val, String),
+    Label(String)
 }
 
 /// ```val = Constant(int) | Var(identifier)```
@@ -48,7 +58,8 @@ pub enum Val {
 #[derive(Debug, PartialEq, Clone)]
 pub enum UnaryOp {
     Complement,
-    Negate
+    Negate,
+    Not
 }
 
 /// ```binary_operator = Add | Subtract | Multiply | Divide | Remainder```
@@ -58,5 +69,11 @@ pub enum BinaryOp {
     Subtract,
     Multiply,
     Divide,
-    Remainder
+    Remainder,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
 }

@@ -65,7 +65,7 @@ fn production_config() {
 
     let ast = match parse_program(&mut tokens) {
         Ok(ast) => {
-            // println!("AST:\n{:?}", ast);
+            println!("AST:\n{:?}", ast);
             ast
         }
         Err(err) => panic!("{:?}", err),
@@ -76,7 +76,7 @@ fn production_config() {
     }
 
     let tacky_ast = emit_tacky(ast);
-    // println!("TACKY AST:\n{:?}", tacky_ast);
+    println!("TACKY AST:\n{:?}", tacky_ast);
 
     if options.tacky {
         return;

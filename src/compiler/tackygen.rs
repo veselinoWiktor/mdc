@@ -35,24 +35,68 @@ fn emit_tacky_statement(statement: AstStatement) -> Vec<Instruction> {
 }
 
 fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static VAR_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static AND_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static OR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     match expression {
         AstExpression::Constant(num) => (vec![], Val::Constant(num)),
         AstExpression::Unary(unary_op, inner_exp) => {
             let (mut inner_instructions, v) = emit_tacky_expression(*inner_exp);
 
-            let dst_name = format!("tmp.{}", COUNTER.fetch_add(1, Ordering::Relaxed));
+            let dst_name = format!("tmp.{}", VAR_COUNTER.fetch_add(1, Ordering::Relaxed));
 
             let dst = Val::Var(dst_name);
             let tacky_op = convert_unary_op(unary_op);
             inner_instructions.push(Instruction::Unary(tacky_op, v, dst.clone()));
             (inner_instructions, dst)
         }
+        AstExpression::Binary(AstBinaryOp::And, left, right) => {
+            let jump_name = format!("and_false{}", AND_COUNTER.fetch_add(1, Ordering::Relaxed));
+
+            let (mut left_instructions ,v1) = emit_tacky_expression(*left);
+            left_instructions.push(Instruction::JumpIfZero(v1, jump_name.clone()));
+            let (mut right_instructions ,v2) = emit_tacky_expression(*right);
+            right_instructions.push(Instruction::JumpIfZero(v2, jump_name.clone()));
+
+            left_instructions.append(&mut right_instructions);
+
+            let res_name = format!("tmp.{}", VAR_COUNTER.fetch_add(1, Ordering::Relaxed));
+            let res = Val::Var(res_name);
+
+            left_instructions.push(Instruction::Copy(Val::Constant(1), res.clone()));
+            left_instructions.push(Instruction::Jump("end".to_string()));
+            left_instructions.push(Instruction::Label(jump_name));
+            left_instructions.push(Instruction::Copy(Val::Constant(0), res.clone()));
+            left_instructions.push(Instruction::Label("end".to_string()));
+
+            (left_instructions, res)
+        },
+        AstExpression::Binary(AstBinaryOp::Or, left, right) => {
+            let jump_name = format!("or_false{}", OR_COUNTER.fetch_add(1, Ordering::Relaxed));
+
+            let (mut left_instructions ,v1) = emit_tacky_expression(*left);
+            left_instructions.push(Instruction::JumpIfNotZero(v1, jump_name.clone()));
+            let (mut right_instructions ,v2) = emit_tacky_expression(*right);
+            right_instructions.push(Instruction::JumpIfNotZero(v2, jump_name.clone()));
+
+            left_instructions.append(&mut right_instructions);
+
+            let res_name = format!("tmp.{}", VAR_COUNTER.fetch_add(1, Ordering::Relaxed));
+            let res = Val::Var(res_name);
+
+            left_instructions.push(Instruction::Copy(Val::Constant(1), res.clone()));
+            left_instructions.push(Instruction::Jump("end".to_string()));
+            left_instructions.push(Instruction::Label(jump_name.clone()));
+            left_instructions.push(Instruction::Copy(Val::Constant(0), res.clone()));
+            left_instructions.push(Instruction::Label("end".to_string()));
+
+            (left_instructions, res)
+        },
         AstExpression::Binary(bin_op, left, right) => {
             let (mut left_instructions ,v1) = emit_tacky_expression(*left);
             let (mut right_instructions, v2) = emit_tacky_expression(*right);
-            let dst_name = format!("tmp.{}", COUNTER.fetch_add(1, Ordering::Relaxed));
+            let dst_name = format!("tmp.{}", VAR_COUNTER.fetch_add(1, Ordering::Relaxed));
             let dst = Val::Var(dst_name);
             let tacky_op = convert_binary_op(bin_op);
 
@@ -67,7 +111,7 @@ fn convert_unary_op(unary_op: AstUnaryOp) -> UnaryOp {
     match unary_op {
         AstUnaryOp::Complement => UnaryOp::Complement,
         AstUnaryOp::Negate => UnaryOp::Negate,
-        _ => todo!()
+        AstUnaryOp::Not => UnaryOp::Not,
     }
 }
 
@@ -78,7 +122,13 @@ fn convert_binary_op(binary_op: AstBinaryOp) -> BinaryOp {
         AstBinaryOp::Multiply => BinaryOp::Multiply,
         AstBinaryOp::Divide => BinaryOp::Divide,
         AstBinaryOp::Remainder => BinaryOp::Remainder,
-        _ => todo!()
+        AstBinaryOp::Equal => BinaryOp::Equal,
+        AstBinaryOp::NotEqual => BinaryOp::NotEqual,
+        AstBinaryOp::LessThan => BinaryOp::LessThan,
+        AstBinaryOp::LessOrEqual => BinaryOp::LessOrEqual,
+        AstBinaryOp::GreaterThan => BinaryOp::GreaterThan,
+        AstBinaryOp::GreaterOrEqual => BinaryOp::GreaterOrEqual,
+        _ => unreachable!() // can't reach And | Or because they are handled earlier
     }
 }
 
