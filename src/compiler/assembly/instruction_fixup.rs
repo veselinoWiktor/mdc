@@ -1,6 +1,6 @@
 //! Invalid instructions fix-up
 
-use crate::storage::assembly::{AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister};
+use crate::storage::assembly::{AssemblyBinaryOp, AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister};
 
 pub fn fixup_program(last_stack_slot: i32, program: AssemblyProgram) -> AssemblyProgram {
     match program {
@@ -28,12 +28,57 @@ fn fixup_function(last_stack_slot: i32, function: AssemblyFunctionDefinition) ->
 fn fixup_instruction (instruction: AssemblyInstruction) -> Vec<AssemblyInstruction> {
     match instruction {
         AssemblyInstruction::Mov(AssemblyOperand::Stack(src), AssemblyOperand::Stack(dst)) => {
-            vec![AssemblyInstruction::Mov(
+            vec![
+                AssemblyInstruction::Mov(
                      AssemblyOperand::Stack(src),
                      AssemblyOperand::Reg(AssemblyRegister::R10)),
-                 AssemblyInstruction::Mov(
+                AssemblyInstruction::Mov(
                      AssemblyOperand::Reg(AssemblyRegister::R10),
                      AssemblyOperand::Stack(dst))
+            ]
+        },
+        AssemblyInstruction::Idiv(operand @ AssemblyOperand::Imm(_)) => {
+            vec![
+                AssemblyInstruction::Mov(
+                    operand,
+                    AssemblyOperand::Reg(AssemblyRegister::R10)),
+                AssemblyInstruction::Idiv(
+                    AssemblyOperand::Reg(AssemblyRegister::R10))
+            ]
+        }
+        AssemblyInstruction::Binary(AssemblyBinaryOp::Add, src, dst) => {
+            vec![
+                AssemblyInstruction::Mov(
+                    src,
+                    AssemblyOperand::Reg(AssemblyRegister::R10)),
+                AssemblyInstruction::Binary(
+                    AssemblyBinaryOp::Add,
+                    AssemblyOperand::Reg(AssemblyRegister::R10),
+                    dst)]
+        }
+        AssemblyInstruction::Binary(AssemblyBinaryOp::Sub, src, dst) => {
+            vec![
+                AssemblyInstruction::Mov(
+                    src,
+                    AssemblyOperand::Reg(AssemblyRegister::R10)),
+                AssemblyInstruction::Binary(
+                    AssemblyBinaryOp::Sub,
+                    AssemblyOperand::Reg(AssemblyRegister::R10),
+                    dst)
+            ]
+        }
+        AssemblyInstruction::Binary(AssemblyBinaryOp::Mult, src, AssemblyOperand::Stack(stack)) => {
+            vec![
+                AssemblyInstruction::Mov(
+                    AssemblyOperand::Stack(stack),
+                    AssemblyOperand::Reg(AssemblyRegister::R11)),
+                AssemblyInstruction::Binary(
+                    AssemblyBinaryOp::Mult,
+                    src,
+                    AssemblyOperand::Reg(AssemblyRegister::R11)),
+                AssemblyInstruction::Mov(
+                    AssemblyOperand::Reg(AssemblyRegister::R11),
+                    AssemblyOperand::Stack(stack)),
             ]
         }
         other => vec![other],

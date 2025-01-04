@@ -12,6 +12,9 @@ pub enum AssemblyFunctionDefinition {
 pub enum AssemblyInstruction {
     Mov(AssemblyOperand, AssemblyOperand),
     Unary(AssemblyUnaryOp, AssemblyOperand),
+    Binary(AssemblyBinaryOp, AssemblyOperand, AssemblyOperand),
+    Idiv(AssemblyOperand),
+    Cdq,
     AllocateStack(i32),
     Ret
 }
@@ -20,6 +23,13 @@ pub enum AssemblyInstruction {
 pub enum AssemblyUnaryOp {
     Neg,
     Not
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AssemblyBinaryOp {
+    Add,
+    Sub,
+    Mult
 }
 
 #[derive(Debug, PartialEq)]
@@ -33,5 +43,7 @@ pub enum AssemblyOperand {
 #[derive(Debug, PartialEq)]
 pub enum AssemblyRegister {
     AX,
-    R10
+    DX,
+    R10,
+    R11
 }

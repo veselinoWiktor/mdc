@@ -5,7 +5,7 @@ use regex::{Regex};
 use super::token::{Token};
 
 struct TokenDef {
-    pattern: String,
+    // pattern: String,
     regex: Regex,
     converter: Box<dyn Fn(&str) -> Token>,
 }
@@ -16,7 +16,7 @@ pub struct TokenizeError(String);
 impl TokenDef {
     fn new(pattern: &str, converter: Box<dyn Fn(&str) -> Token>) -> Self {
         TokenDef {
-            pattern: pattern.to_string(),
+            // pattern: pattern.to_string(),
             regex: Regex::new(&format!("^{}", pattern)).unwrap(),
             converter,
         }

@@ -1,6 +1,6 @@
 use crate::compiler::token::Token;
 use crate::storage::ast::{
-    AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp,
+    AstBinaryOp, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp,
 };
 
 #[derive(Debug, PartialEq)]
@@ -52,10 +52,7 @@ fn parse_function(tokens: &mut Vec<Token>) -> Result<AstFunctionDefinition, Pars
     expect(&Token::CloseBrace, tokens)?;
     tokens.remove(0);
 
-    Ok(AstFunctionDefinition::Function(
-        Token::Identifier(identifier),
-        statement,
-    ))
+    Ok(AstFunctionDefinition::Function(identifier, statement))
 }
 
 fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
@@ -64,9 +61,8 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
         Err(err) => return Err(err),
     };
 
-    let return_val = match parse_expression(tokens) {
+    let return_val = match parse_expression(tokens, 0) {
         Ok(exp) => {
-            tokens.remove(0);
             exp
         }
         Err(err) => return Err(err),
@@ -81,20 +77,45 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
 }
 
 /// ```<exp> ::= <int> | <unop> <exp> | "(" <exp> ")"```
-fn parse_expression(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
+fn parse_expression(tokens: &mut Vec<Token>, min_prec: u8) -> Result<AstExpression, ParserErr> {
+    let mut left = parse_factor(tokens)?;
+    tokens.remove(0);
+
+    while let Some(
+        token @ Token::Plus
+        | token @ Token::Hyphen
+        | token @ Token::Asterisk
+        | token @ Token::ForwardSlash
+        | token @ Token::Percent,
+    ) = tokens.first()
+    {
+        let curr_prec = binary_op_precedence(token);
+        if curr_prec >= min_prec {
+            let operator = parse_binary_operator(tokens)?;
+            tokens.remove(0);
+            let right = parse_expression(tokens, curr_prec + 1)?;
+            left = AstExpression::Binary(operator, Box::new(left), Box::new(right));
+        } else {
+            break;
+        }
+    }
+
+    Ok(left)
+}
+
+fn parse_factor(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
     match tokens.first() {
         Some(token) => match token {
-            Token::Constant(num) => Ok(AstExpression::Constant(Token::Constant(num.clone()))),
+            Token::Constant(num) => Ok(AstExpression::Constant(num.clone())),
             Token::Tilde | Token::Hyphen => {
                 let operator = parse_unary_operator(tokens)?;
                 tokens.remove(0);
-                let inner_expr = parse_expression(tokens)?;
+                let inner_expr = parse_factor(tokens)?;
                 Ok(AstExpression::Unary(operator, Box::new(inner_expr)))
             }
             Token::OpenParen => {
                 tokens.remove(0);
-                let inner_expr = parse_expression(tokens)?;
-                tokens.remove(0);
+                let inner_expr = parse_expression(tokens, 0)?;
                 expect(&Token::CloseParen, tokens)?;
 
                 Ok(inner_expr)
@@ -109,17 +130,42 @@ fn parse_expression(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr>
     }
 }
 
-fn parse_unary_operator(tokens: &mut Vec<Token>) -> Result<AstUnaryOp, ParserErr> {
+fn parse_unary_operator(tokens: &Vec<Token>) -> Result<AstUnaryOp, ParserErr> {
     match tokens.first() {
         Some(token) => match token {
             Token::Tilde => Ok(AstUnaryOp::Complement),
             Token::Hyphen => Ok(AstUnaryOp::Negate),
             _ => Err(ParserErr(format!(
                 "expected token signifying unary operation, got {:?}",
-                tokens.first().unwrap()
+                token
             ))),
         },
         None => Err(ParserErr("No more tokens".to_string())),
+    }
+}
+
+fn parse_binary_operator(tokens: &Vec<Token>) -> Result<AstBinaryOp, ParserErr> {
+    match tokens.first() {
+        Some(token) => match token {
+            Token::Plus => Ok(AstBinaryOp::Add),
+            Token::Hyphen => Ok(AstBinaryOp::Subtract),
+            Token::Asterisk => Ok(AstBinaryOp::Multiply),
+            Token::ForwardSlash => Ok(AstBinaryOp::Divide),
+            Token::Percent => Ok(AstBinaryOp::Remainder),
+            _ => Err(ParserErr(format!(
+                "expected token signifying binary operation, got {:?}",
+                token
+            ))),
+        },
+        None => Err(ParserErr("No more tokens".to_string())),
+    }
+}
+
+fn binary_op_precedence(binary_op: &Token) -> u8 {
+    match binary_op {
+        Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
+        Token::Plus | Token::Hyphen => 45,
+        _ => unreachable!(),
     }
 }
 
@@ -194,13 +240,13 @@ mod tests {
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(AstExpression::Constant(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::Constant(15)));
 
         let mut tokens = vec![Token::Constant(15)];
 
         let expr = parse_expression(&mut tokens);
 
-        assert_eq!(expr, Ok(AstExpression::Constant(Token::Constant(15))));
+        assert_eq!(expr, Ok(AstExpression::Constant(15)));
     }
 
     #[test]
@@ -232,9 +278,7 @@ mod tests {
 
         assert_eq!(
             statement,
-            Ok(AstStatement::Return(AstExpression::Constant(
-                Token::Constant(2)
-            )))
+            Ok(AstStatement::Return(AstExpression::Constant(2)))
         );
         assert_eq!(tokens, vec![Token::CloseBrace]);
         assert_eq!(tokens.len(), 1);
@@ -248,9 +292,7 @@ mod tests {
 
         assert_eq!(
             statement,
-            Ok(AstStatement::Return(AstExpression::Constant(
-                Token::Constant(2)
-            )))
+            Ok(AstStatement::Return(AstExpression::Constant(2)))
         );
         assert_eq!(tokens.len(), 0);
         assert_eq!(tokens, vec![]);
@@ -322,8 +364,8 @@ mod tests {
         assert_eq!(
             statement,
             Ok(AstFunctionDefinition::Function(
-                Token::Identifier("main".to_string()),
-                AstStatement::Return(AstExpression::Constant(Token::Constant(2)))
+                "main".to_string(),
+                AstStatement::Return(AstExpression::Constant(2))
             ))
         );
         assert_eq!(tokens, vec![]);
@@ -388,12 +430,10 @@ mod tests {
 
         assert_eq!(
             statement,
-            Ok(AstProgram::Program(
-                AstFunctionDefinition::Function(
-                    Token::Identifier("main".to_string()),
-                    AstStatement::Return(AstExpression::Constant(Token::Constant(2)))
-                )
-            ))
+            Ok(AstProgram::Program(AstFunctionDefinition::Function(
+                "main".to_string(),
+                AstStatement::Return(AstExpression::Constant(2))
+            )))
         );
     }
 

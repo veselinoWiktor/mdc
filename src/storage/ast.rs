@@ -1,16 +1,19 @@
-use std::fmt::{Display, Formatter};
-use crate::compiler::token::Token;
+//! Three-address code(TAC)-KY makes it fancier.
+//!
+//! TACKY ASDL definition:
+//! ```
+//! <program> ::= <function>
+//! <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
+//! <statement> ::= "return" <exp> ";"
+//! <exp> ::= <factor> | <exp> <binop> <exp>
+//! <factor> ::= <int> | <unop> <factor> | "(" <exp> ")"
+//! <unop> ::= "-" | "~"
+//! <binop> ::= "-" | "+" | "*" | "/" | "%"
+//! <identifier> ::= ? An identifier token ?
+//! <int> ::= ? A constant token ?
+//! ```
 
-/// # Grammar
-/// ```
-/// <program> ::= <function>
-/// <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-/// <statement> ::= "return" <exp> ";"
-/// <exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
-/// <unop> ::= "-" | "~"
-/// <identifier> ::= ? An identifier token ?
-/// <int> ::= ? A constant token ?
-/// ```
+use std::fmt::{Display, Formatter};
 
 pub trait PrettyFormatter {
     fn pretty_format(&self, indent: usize) -> String;
@@ -48,7 +51,7 @@ impl Display for AstProgram {
 
 #[derive(Debug, PartialEq)]
 pub enum AstFunctionDefinition {
-    Function(Token, AstStatement)
+    Function(String, AstStatement)
 }
 
 impl PrettyFormatter for AstFunctionDefinition {
@@ -57,7 +60,7 @@ impl PrettyFormatter for AstFunctionDefinition {
         result.push_str(&" ".repeat(indent));
         result.push_str("Function(\n");
         match self {
-            AstFunctionDefinition::Function(Token::Identifier(identifier), statement) => {
+            AstFunctionDefinition::Function(identifier, statement) => {
                 result.push_str(&" ".repeat(indent + 4));
                 result.push_str(format!("name=\"{}\"\n", identifier).as_str());
                 result.push_str(&" ".repeat(indent + 4));
@@ -65,7 +68,6 @@ impl PrettyFormatter for AstFunctionDefinition {
                 result.push_str(statement.pretty_format(indent + 4).as_str());
                 result.push_str("\n");
             }
-            _ => unreachable!()
         }
         result.push_str(&" ".repeat(indent));
         result.push_str(")");
@@ -76,10 +78,9 @@ impl PrettyFormatter for AstFunctionDefinition {
 impl Display for AstFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstFunctionDefinition::Function(Token::Identifier(identifier), statement) => {
+            AstFunctionDefinition::Function(identifier, statement) => {
                 write!(f, "\tFunction(\n\t\tname=\"{}\",\n\t\tbody={}\n\t)", identifier.clone(), statement.to_string())
             },
-            _ => unreachable!()
         }
     }
 }
@@ -117,8 +118,9 @@ impl Display for AstStatement {
 
 #[derive(Debug, PartialEq)]
 pub enum AstExpression {
-    Constant(Token),
-    Unary(AstUnaryOp, Box<AstExpression>)
+    Constant(i32),
+    Unary(AstUnaryOp, Box<AstExpression>),
+    Binary(AstBinaryOp, Box<AstExpression>, Box<AstExpression>)
 }
 
 impl PrettyFormatter for AstExpression {
@@ -126,7 +128,7 @@ impl PrettyFormatter for AstExpression {
         let mut result = String::new();
         result.push_str(&" ".repeat(indent));
         match self {
-            AstExpression::Constant(Token::Constant(num)) => {
+            AstExpression::Constant(num) => {
                 result.push_str(format!("Constant({})", num).as_str());
             }
             _ => unreachable!()
@@ -139,7 +141,7 @@ impl PrettyFormatter for AstExpression {
 impl Display for AstExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstExpression::Constant(Token::Constant(num)) => {
+            AstExpression::Constant(num) => {
                 write!(f, "\t\t\tConstant({})", num.to_string())
             },
             _ => unreachable!()
@@ -148,7 +150,23 @@ impl Display for AstExpression {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum AstFactor {
+    Constant(i32),
+    Unary(AstUnaryOp, Box<AstFactor>),
+    Expression(AstExpression)
+}
+
+#[derive(Debug, PartialEq)]
 pub enum AstUnaryOp{
     Complement,
     Negate
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AstBinaryOp{
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder
 }

@@ -58,8 +58,20 @@ fn replace_pseudos_in_instruction(mut state: ReplacementState, instruction: Asse
             let new_dst = replace_operand(&mut state, dst);
             (state, AssemblyInstruction::Unary(op, new_dst))
         }
+        AssemblyInstruction::Binary(op, src, dst) => {
+            let new_src = replace_operand(&mut state, src);
+            let new_dst = replace_operand(&mut state, dst);
+            (state, AssemblyInstruction::Binary(op, new_src, new_dst))
+        }
+        AssemblyInstruction::Idiv(src) => {
+            let new_src = replace_operand(&mut state, src);
+            (state, AssemblyInstruction::Idiv(new_src))
+        }
         AssemblyInstruction::Ret => {
             (state, AssemblyInstruction::Ret)
+        }
+        AssemblyInstruction::Cdq => {
+            (state, AssemblyInstruction::Cdq)
         }
         AssemblyInstruction::AllocateStack(_) => {
             panic!("Internal error: AllocateStack shouldn't be present at this point")

@@ -1,7 +1,7 @@
 //! Converting TACKY to assembly
 
-use crate::storage::assembly::{AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister, AssemblyUnaryOp};
-use crate::storage::tacky::{FunctionDefinition, Instruction, Program, UnaryOp, Val};
+use crate::storage::assembly::{AssemblyBinaryOp, AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister, AssemblyUnaryOp};
+use crate::storage::tacky::{BinaryOp, FunctionDefinition, Instruction, Program, UnaryOp, Val};
 
 pub fn gen(program: Program) -> AssemblyProgram {
     match program {
@@ -34,15 +34,41 @@ fn convert_instruction(instruction: Instruction) -> Vec<AssemblyInstruction>
         }
         Instruction::Unary(un_op, src, dst) => {
             vec![AssemblyInstruction::Mov(convert_operand(src), convert_operand(dst.clone())),
-                 AssemblyInstruction::Unary(convert_operator(un_op), convert_operand(dst))]
-        }
+                 AssemblyInstruction::Unary(convert_unary_op(un_op), convert_operand(dst))]
+        },
+        Instruction::Binary(BinaryOp::Divide, src1, src2, dst) => {
+            vec![AssemblyInstruction::Mov(convert_operand(src1), AssemblyOperand::Reg(AssemblyRegister::AX)),
+                 AssemblyInstruction::Cdq,
+                 AssemblyInstruction::Idiv(convert_operand(src2)),
+                 AssemblyInstruction::Mov(AssemblyOperand::Reg(AssemblyRegister::AX), convert_operand(dst))]
+        },
+        Instruction::Binary(BinaryOp::Remainder, src1, src2, dst) => {
+            vec![AssemblyInstruction::Mov(convert_operand(src1), AssemblyOperand::Reg(AssemblyRegister::AX)),
+                 AssemblyInstruction::Cdq,
+                 AssemblyInstruction::Idiv(convert_operand(src2)),
+                 AssemblyInstruction::Mov(AssemblyOperand::Reg(AssemblyRegister::DX), convert_operand(dst))]
+        },
+        Instruction::Binary(bin_op, src1, src2, dst) => {
+            vec![AssemblyInstruction::Mov(convert_operand(src1), convert_operand(dst.clone())),
+                 AssemblyInstruction::Binary(convert_binary_op(bin_op), convert_operand(src2), convert_operand(dst))]
+        },
+
     }
 }
 
-fn convert_operator(operator: UnaryOp) -> AssemblyUnaryOp {
-    match operator {
+fn convert_unary_op(un_op: UnaryOp) -> AssemblyUnaryOp {
+    match un_op {
         UnaryOp::Complement => AssemblyUnaryOp::Not,
         UnaryOp::Negate => AssemblyUnaryOp::Neg
+    }
+}
+
+fn convert_binary_op(bin_op: BinaryOp) -> AssemblyBinaryOp {
+    match bin_op {
+        BinaryOp::Add => AssemblyBinaryOp::Add,
+        BinaryOp::Subtract => AssemblyBinaryOp::Sub,
+        BinaryOp::Multiply => AssemblyBinaryOp::Mult,
+        _ => unreachable!()
     }
 }
 
