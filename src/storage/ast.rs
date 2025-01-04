@@ -152,7 +152,8 @@ impl Display for AstExpression {
 #[derive(Debug, PartialEq)]
 pub enum AstUnaryOp{
     Complement,
-    Negate
+    Negate,
+    Not
 }
 
 #[derive(Debug, PartialEq)]
@@ -161,5 +162,13 @@ pub enum AstBinaryOp{
     Subtract,
     Multiply,
     Divide,
-    Remainder
+    Remainder,
+    And,
+    Or,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
 }

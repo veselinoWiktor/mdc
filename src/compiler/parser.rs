@@ -86,7 +86,15 @@ fn parse_expression(tokens: &mut Vec<Token>, min_prec: u8) -> Result<AstExpressi
         | token @ Token::Hyphen
         | token @ Token::Asterisk
         | token @ Token::ForwardSlash
-        | token @ Token::Percent,
+        | token @ Token::Percent
+        | token @ Token::LogicalAnd
+        | token @ Token::LogicalOr
+        | token @ Token::LogicalEqual
+        | token @ Token::LogicalNotEqual
+        | token @ Token::LessThan
+        | token @ Token::LessThanEqual
+        | token @ Token::GreaterThan
+        | token @ Token::GreaterThanEqual
     ) = tokens.first()
     {
         let curr_prec = binary_op_precedence(token);
@@ -107,7 +115,7 @@ fn parse_factor(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
     match tokens.first() {
         Some(token) => match token {
             Token::Constant(num) => Ok(AstExpression::Constant(num.clone())),
-            Token::Tilde | Token::Hyphen => {
+            Token::Tilde | Token::Hyphen | Token::LogicalNot => {
                 let operator = parse_unary_operator(tokens)?;
                 tokens.remove(0);
                 let inner_expr = parse_factor(tokens)?;
@@ -135,6 +143,7 @@ fn parse_unary_operator(tokens: &Vec<Token>) -> Result<AstUnaryOp, ParserErr> {
         Some(token) => match token {
             Token::Tilde => Ok(AstUnaryOp::Complement),
             Token::Hyphen => Ok(AstUnaryOp::Negate),
+            Token::LogicalNot => Ok(AstUnaryOp::Not),
             _ => Err(ParserErr(format!(
                 "expected token signifying unary operation, got {:?}",
                 token
@@ -152,6 +161,14 @@ fn parse_binary_operator(tokens: &Vec<Token>) -> Result<AstBinaryOp, ParserErr> 
             Token::Asterisk => Ok(AstBinaryOp::Multiply),
             Token::ForwardSlash => Ok(AstBinaryOp::Divide),
             Token::Percent => Ok(AstBinaryOp::Remainder),
+            Token::LogicalAnd => Ok(AstBinaryOp::And),
+            Token::LogicalOr => Ok(AstBinaryOp::Or),
+            Token::LogicalEqual => Ok(AstBinaryOp::Equal),
+            Token::LogicalNotEqual => Ok(AstBinaryOp::NotEqual),
+            Token::LessThan => Ok(AstBinaryOp::LessThan),
+            Token::LessThanEqual => Ok(AstBinaryOp::LessOrEqual),
+            Token::GreaterThan => Ok(AstBinaryOp::GreaterThan),
+            Token::GreaterThanEqual => Ok(AstBinaryOp::GreaterOrEqual),
             _ => Err(ParserErr(format!(
                 "expected token signifying binary operation, got {:?}",
                 token
@@ -165,6 +182,10 @@ fn binary_op_precedence(binary_op: &Token) -> u8 {
     match binary_op {
         Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
         Token::Plus | Token::Hyphen => 45,
+        Token::LessThan | Token::LessThanEqual | Token::GreaterThan | Token::GreaterThanEqual => 40,
+        Token::LogicalEqual | Token::LogicalNotEqual => 35,
+        Token::LogicalAnd => 10,
+        Token::LogicalOr => 5,
         _ => unreachable!(),
     }
 }

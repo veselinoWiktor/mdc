@@ -67,6 +67,7 @@ fn convert_unary_op(unary_op: AstUnaryOp) -> UnaryOp {
     match unary_op {
         AstUnaryOp::Complement => UnaryOp::Complement,
         AstUnaryOp::Negate => UnaryOp::Negate,
+        _ => todo!()
     }
 }
 
@@ -77,6 +78,7 @@ fn convert_binary_op(binary_op: AstBinaryOp) -> BinaryOp {
         AstBinaryOp::Multiply => BinaryOp::Multiply,
         AstBinaryOp::Divide => BinaryOp::Divide,
         AstBinaryOp::Remainder => BinaryOp::Remainder,
+        _ => todo!()
     }
 }
 
