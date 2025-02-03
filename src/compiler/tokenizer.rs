@@ -1,8 +1,8 @@
 //! C tokenizer that produces ['Token'] instances.
 
-use regex::{Regex};
+use regex::Regex;
 
-use super::token::{Token};
+use super::token::Token;
 
 struct TokenDef {
     // pattern: String,
@@ -106,9 +106,7 @@ pub fn tokenize(mut input: &str) -> Result<Vec<Token>, TokenizeError> {
         // try to match tokens
         let matches: Vec<_> = token_defs
             .iter()
-            .filter_map(|td| {
-                find_match(input, td)
-            })
+            .filter_map(|td| find_match(input, td))
             .collect();
 
         // error if no matches
@@ -131,52 +129,194 @@ pub fn tokenize(mut input: &str) -> Result<Vec<Token>, TokenizeError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::compiler::token::{Token};
+    use crate::compiler::token::Token;
     use crate::compiler::tokenizer::{tokenize, TokenizeError};
 
     #[test]
-    fn basic() {
-        let code =
-        "int main(void) {
-            return 2;
-        }";
+    fn tokenizer_invalid_at_sing() {
+        let code = r"
+            int main(void) {
+                return 0@1;
+            }
+            ";
 
-        assert_eq!(tokenize(code).unwrap(), vec![
-            Token::Integer,
-            Token::Identifier("main".to_string()),
-            Token::OpenParen,
-            Token::Void,
-            Token::CloseParen,
-            Token::OpenBrace,
-            Token::Return,
-            Token::Constant(2),
-            Token::Semicolon,
-            Token::CloseBrace]);
+        assert_eq!(
+            tokenize(code),
+            Err(TokenizeError("Unable to find match".to_string()))
+        );
     }
 
     #[test]
-    fn basic_fail() {
-        let code =
-        "int main(void) {
-            int a = 5;
-            return a;
-        }";
+    fn tokenizer_invalid_backlash() {
+        let code = r"\";
 
-        assert_eq!(tokenize(code).unwrap_err(), TokenizeError("Unable to find match".to_string()));
+        assert_eq!(
+            tokenize(code),
+            Err(TokenizeError("Unable to find match".to_string()))
+        );
     }
 
     #[test]
-    fn recognises_hyphen() {
-        assert_eq!(tokenize("-5").unwrap(), vec![Token::Hyphen, Token::Constant(5)]);
+    fn tokenizer_invalid_backtick() {
+        let code = r"`";
+
+        assert_eq!(
+            tokenize(code),
+            Err(TokenizeError("Unable to find match".to_string()))
+        );
     }
 
     #[test]
-    fn recognises_double_hyphen() {
-        assert_eq!(tokenize("--5").unwrap(), vec![Token::DoubleHyphen, Token::Constant(5)]);
+    fn tokenizer_invalid_identifier() {
+        let code = r"
+            int main(void) {
+                return 1foo;
+            }
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Err(TokenizeError("Unable to find match".to_string()))
+        );
     }
 
     #[test]
-    fn recognises_tilde() {
-        assert_eq!(tokenize("-(~5)").unwrap(), vec![Token::Hyphen, Token::OpenParen, Token::Tilde, Token::Constant(5), Token::CloseParen]);
+    fn tokenizer_invalid_identifier_2() {
+        let code = r"
+            int main(void) {
+                return @b;
+            }
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Err(TokenizeError("Unable to find match".to_string()))
+        );
+    }
+
+    #[test]
+    fn tokenizer_valid_multi_digit() {
+        let code = r"
+            int main(void) {
+                return 100;
+            }
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Ok(vec![
+                Token::Integer,
+                Token::Identifier("main".to_string()),
+                Token::OpenParen,
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(100),
+                Token::Semicolon,
+                Token::CloseBrace,
+            ])
+        );
+    }
+
+    #[test]
+    fn tokenizer_valid_newlines() {
+        let code = r"
+            int
+            main
+            (
+            void
+            )
+            {
+            return
+            0
+            ;
+            }
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Ok(vec![
+                Token::Integer,
+                Token::Identifier("main".to_string()),
+                Token::OpenParen,
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(0),
+                Token::Semicolon,
+                Token::CloseBrace,
+            ])
+        );
+    }
+
+    #[test]
+    fn tokenizer_valid_no_newlines() {
+        let code = r"
+            int main(void){return 2;}
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Ok(vec![
+                Token::Integer,
+                Token::Identifier("main".to_string()),
+                Token::OpenParen,
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(2),
+                Token::Semicolon,
+                Token::CloseBrace,
+            ])
+        );
+    }
+
+    #[test]
+    fn tokenizer_valid_spaces() {
+        let code = r"
+            int   main    (  void)  {   return  3 ; }
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Ok(vec![
+                Token::Integer,
+                Token::Identifier("main".to_string()),
+                Token::OpenParen,
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(3),
+                Token::Semicolon,
+                Token::CloseBrace,
+            ])
+        );
+    }
+
+    #[test]
+    fn tokenizer_valid_tabs() {
+        let code = r"
+            int	main	(	void)	{	return	4	;	}
+            ";
+
+        assert_eq!(
+            tokenize(code),
+            Ok(vec![
+                Token::Integer,
+                Token::Identifier("main".to_string()),
+                Token::OpenParen,
+                Token::Void,
+                Token::CloseParen,
+                Token::OpenBrace,
+                Token::Return,
+                Token::Constant(4),
+                Token::Semicolon,
+                Token::CloseBrace,
+            ])
+        );
     }
 }

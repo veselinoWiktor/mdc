@@ -259,13 +259,13 @@ mod tests {
     fn parse_expression_basic_pass() {
         let mut tokens = vec![Token::Constant(15), Token::Semicolon];
 
-        let expr = parse_expression(&mut tokens);
+        let expr = parse_expression(&mut tokens, 0);
 
         assert_eq!(expr, Ok(AstExpression::Constant(15)));
 
         let mut tokens = vec![Token::Constant(15)];
 
-        let expr = parse_expression(&mut tokens);
+        let expr = parse_expression(&mut tokens, 0);
 
         assert_eq!(expr, Ok(AstExpression::Constant(15)));
     }
@@ -274,7 +274,7 @@ mod tests {
     fn parse_expression_basic_fail() {
         let mut tokens = vec![Token::Semicolon];
 
-        let expr = parse_expression(&mut tokens);
+        let expr = parse_expression(&mut tokens, 0);
 
         assert_eq!(
             expr,
