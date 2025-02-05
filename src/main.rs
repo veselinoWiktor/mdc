@@ -1,6 +1,7 @@
 mod cli;
 mod compiler;
 mod storage;
+mod ui;
 
 use crate::cli::setting::Settings;
 use crate::compiler::assembly::instruction_fixup::fixup_program;
@@ -9,14 +10,17 @@ use crate::compiler::emit::emit_assembly;
 use crate::compiler::parser::parse_program;
 use crate::compiler::tackygen::emit_tacky;
 use crate::compiler::tokenizer::tokenize;
+use crate::ui::run_ui;
 use compiler::assembly::codegen::gen;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use structopt::StructOpt;
 
-fn main() {
-    production_config()
+pub fn main() -> iced::Result {
+    run_ui()
+    //iced::application("AST Visualizer", ASTVisualizer::update, ASTVisualizer::view).run()
+    //production_config()
 }
 
 fn debug_config() {

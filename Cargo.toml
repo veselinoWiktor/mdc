@@ -3,7 +3,15 @@ name = "mdc"
 version = "0.1.0"
 edition = "2021"
 
+[env]
+WAYLAND_DISPLAY = ""
+XDG_SESSION_TYPE = "x11"
+LIBGL_ALWAYS_SOFTWARE = "1"
+
 [dependencies]
+iced = { git = "https://github.com/iced-rs/iced.git", features = ["canvas", "highlighter", "debug", "tokio", "lazy"]}
+tokio = {version = "*", features = ["fs"]}
+rfd = "*"
 structopt = "*"
 structopt-derive = "*"
-regex = "1.11.1"
+regex = "*"
