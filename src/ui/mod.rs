@@ -1,22 +1,33 @@
-use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{
-    self, button, center_x, center_y, container, horizontal_space, pick_list, responsive,
-    scrollable, text, text_editor, toggler, tooltip, Button,
-};
-use iced::{highlighter, keyboard, Font, Theme};
-use iced::{Center, Element, Fill, Size, Task};
-use std::{ffi, io};
+mod utils;
+mod style;
+mod ast_canvas_converter;
+mod views;
+mod loader;
 
-use iced::keyboard::on_key_press;
-use std::path::{Path, PathBuf};
+use iced::widget::pane_grid::{self, PaneGrid};
+use iced::widget::{self, container, horizontal_space, pick_list, responsive, text, text_editor, toggler};
+use iced::{event, highlighter, mouse, Color, Event, Font, Pixels, Point, Subscription, Theme};
+use iced::{Center, Element, Fill, Size, Task};
+
+use iced::alignment::{Horizontal};
+use iced::mouse::{Cursor, ScrollDelta};
+use iced::widget::canvas::{Frame, Geometry, Path, Program, Stroke, Style, Text};
+use std::path::{PathBuf};
 use std::sync::Arc;
-use iced::keyboard::key::NativeCode::Windows;
+use iced::widget::text_editor::{Action, Edit};
+use crate::compiler::parser::parse_program;
+use crate::compiler::tokenizer::tokenize;
+use crate::ui::ast_canvas_converter::convert_into_ast_canvas;
+use crate::ui::utils::{open_file, save_file, Error};
+use crate::ui::views::{action, view_canvas, view_editor, view_loader};
 
 pub(crate) fn run_ui() -> iced::Result {
     iced::application("AST Visualizer", ASTVisualizer::update, ASTVisualizer::view)
         .theme(ASTVisualizer::theme)
         .font(include_bytes!("fonts/icons.ttf").as_slice())
         .default_font(Font::MONOSPACE)
+        .subscription(ASTVisualizer::subscription)
+        .antialiasing(true)
         .run_with(ASTVisualizer::new)
 }
 
@@ -30,6 +41,9 @@ struct ASTVisualizer {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
+
+    is_ast_valid: bool,
+    ast: ASTCanvas,
 }
 
 #[derive(Debug, Clone)]
@@ -38,7 +52,7 @@ enum Message {
     Resized(pane_grid::ResizeEvent),
 
     // Editor Messages
-    ActionPerformed(text_editor::Action),
+    ActionPerformed(Action),
     ThemeSelected(highlighter::Theme),
     WordWrapToggled(bool),
     NewFile,
@@ -46,6 +60,12 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
+    InsertTab,
+    CompileCode,
+
+    // AST Canvas
+    ZoomCanvas(f32),
+    GenerateAstCanvas,
 }
 
 impl ASTVisualizer {
@@ -61,16 +81,15 @@ impl ASTVisualizer {
                 content: text_editor::Content::new(),
                 theme: highlighter::Theme::SolarizedDark,
                 word_wrap: true,
-                is_loading: true,
+                is_loading: false,
                 is_dirty: false,
+                is_ast_valid: false,
+                ast: ASTCanvas {
+                    root: example_ast(),
+                    scale: 1.0
+                },
             },
-            Task::batch([
-                Task::perform(
-                    load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
-                    Message::FileOpened,
-                ),
-                widget::focus_next(),
-            ]),
+            Task::batch([Task::done(Message::NewFile), widget::focus_next()]),
         )
     }
 
@@ -86,7 +105,9 @@ impl ASTVisualizer {
 
                 self.content.perform(action);
 
-                Task::none()
+                // here should be the update of the tree canvas
+                // get the text
+                Task::done(Message::GenerateAstCanvas)
             }
             Message::ThemeSelected(theme) => {
                 self.theme = theme;
@@ -101,6 +122,7 @@ impl ASTVisualizer {
             Message::NewFile => {
                 if !self.is_loading {
                     self.file = None;
+                    self.is_ast_valid = false;
                     self.content = text_editor::Content::new();
                 }
 
@@ -122,9 +144,10 @@ impl ASTVisualizer {
                 if let Ok((path, contents)) = result {
                     self.file = Some(path);
                     self.content = text_editor::Content::with_text(&contents);
+                    Task::done(Message::GenerateAstCanvas)
+                } else {
+                    Task::none()
                 }
-
-                Task::none()
             }
             Message::SaveFile => {
                 if self.is_loading {
@@ -151,6 +174,61 @@ impl ASTVisualizer {
                 }
 
                 Task::none()
+            },
+            Message::InsertTab => {
+                self.is_loading = true;
+
+                // let mut text = self.content.text();
+                // let (x, y) = self.content.cursor_position();
+                // text.insert_str(y, "    ");
+                // self.content = text_editor::Content::with_text(&text);
+                self.content.perform(Action::Edit(Edit::Paste(Arc::new("    ".to_string()))));
+
+                self.is_loading = false;
+
+                Task::none()
+            }
+            Message::CompileCode => {
+                if self.is_loading {
+                    Task::none()
+                } else {
+                    self.is_loading = true;
+
+                    //let mut text = self.content.text();
+                    Task::none()
+                }
+            }
+            Message::ZoomCanvas(zoom) => {
+                self.ast.scale  = (self.ast.scale + zoom).clamp(0.5, 3.0);
+
+                Task::none()
+            }
+            Message::GenerateAstCanvas => {
+                let text = self.content.text();
+
+                self.is_ast_valid = true;
+                // tokenize it
+                let mut tokens = match tokenize(&text) {
+                    Ok(tokens) => tokens,
+                    Err(_) => {
+                        self.is_ast_valid = false;
+                        return Task::none()
+                    }
+                };
+
+                // generate ast
+                let ast = match parse_program(&mut tokens) {
+                    Ok(ast) => ast,
+                    Err(_) => {
+                        self.is_ast_valid = false;
+                        return Task::none()
+                    }
+                };
+
+                // generate ast canvas
+                self.ast = convert_into_ast_canvas(&ast);
+
+                Task::none()
             }
         }
     }
@@ -168,6 +246,11 @@ impl ASTVisualizer {
                 "Save file",
                 self.is_dirty.then_some(Message::SaveFile)
             ),
+            action(
+                style::compiler_icon(),
+                "Compile code",
+                self.is_dirty.then_some(Message::CompileCode)
+            ),
             horizontal_space(),
             toggler(self.word_wrap)
                 .label("Word Wrap")
@@ -184,14 +267,20 @@ impl ASTVisualizer {
         .align_y(Center);
 
         let focus = self.focus;
-        let total_panes = self.panes.len();
 
-        let pane_grid = PaneGrid::new(&self.panes, |id, pane, is_maximized| {
+        let pane_grid = PaneGrid::new(&self.panes, |id, pane, _| {
             let is_focused = focus == Some(id);
 
-            pane_grid::Content::new(responsive(move |size| match pane.id {
-                0 => self.view_editor(),
-                1 => view_content(id, total_panes, pane.is_pinned, size),
+            pane_grid::Content::new(responsive(move |_| match pane.id {
+                0 => view_editor(&self.content, self.word_wrap, &self.file, &self.theme),
+                1 => {
+                    if self.is_ast_valid {
+                        view_canvas(&self.ast)
+                    }
+                    else {
+                        view_loader()
+                    }
+                },
                 _ => todo!(),
             }))
             .style(if is_focused {
@@ -232,32 +321,6 @@ impl ASTVisualizer {
             .into()
     }
 
-    fn view_editor(&self) -> Element<Message> {
-        text_editor(&self.content)
-            .height(Fill)
-            .on_action(Message::ActionPerformed)
-            .wrapping(if self.word_wrap {
-                text::Wrapping::Word
-            } else {
-                text::Wrapping::None
-            })
-            .highlight(
-                self.file
-                    .as_deref()
-                    .and_then(Path::extension)
-                    .and_then(ffi::OsStr::to_str)
-                    .unwrap_or("rs"),
-                self.theme,
-            )
-            .key_binding(|key_press| match key_press.key.as_ref() {
-                keyboard::Key::Character("s") if key_press.modifiers.command() => {
-                    Some(text_editor::Binding::Custom(Message::SaveFile))
-                }
-                _ => text_editor::Binding::from_key_press(key_press),
-            })
-            .into()
-    }
-
     fn theme(&self) -> Theme {
         if self.theme.is_dark() {
             Theme::Dark
@@ -265,158 +328,190 @@ impl ASTVisualizer {
             Theme::Light
         }
     }
+
+    fn subscription(&self) -> Subscription<Message> {
+        event::listen().map(|event| {
+            if let Event::Mouse(mouse::Event::WheelScrolled{ delta} ) = event {
+                match delta {
+                    ScrollDelta::Lines { y, .. } => Message::ZoomCanvas(y * 0.1),
+                    ScrollDelta::Pixels { y, .. } => Message::ZoomCanvas(y * 0.001),
+                }
+            } else {
+                Message::ZoomCanvas(0.0)
+            }
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ASTNode {
+    value: String,
+    children: Vec<ASTNode>,
+}
+
+impl ASTNode {
+    fn new(value: String) -> Self {
+        Self {
+            value,
+            children: Vec::new(),
+        }
+    }
+}
+
+
+
+fn example_ast() -> ASTNode {
+    ASTNode {
+        value: "Program(function_definition)".to_string(),
+        children: vec![ASTNode {
+            value: "Function('main', body)".to_string(),
+            children: vec![
+                ASTNode {
+                    value: "Return(exp)".to_string(),
+                    children: vec![ASTNode {
+                        value: "Constant(2)".to_string(),
+                        children: vec![],
+                    }],
+                },
+                ASTNode {
+                    value: "Return(exp)".to_string(),
+                    children: vec![ASTNode {
+                        value: "Constant(2)".to_string(),
+                        children: vec![],
+                    }],
+                },
+            ],
+        }],
+    }
+}
+
+struct ASTCanvas {
+    root: ASTNode,
+    scale: f32
+}
+
+impl ASTCanvas {
+    fn new(root: ASTNode) -> ASTCanvas {
+        ASTCanvas {
+            root,
+            scale: 1.0
+        }
+    }
+
+    // fn new empty
+}
+
+impl<Message> Program<Message> for ASTCanvas {
+    type State = ();
+    fn draw(
+        &self,
+        _state: &Self::State,
+        _renderer: &iced::Renderer,
+        _theme: &Theme,
+        bounds: iced::Rectangle,
+        _cursor: Cursor,
+    ) -> Vec<Geometry> {
+        let frame_size = Size::new(3000.0, 2000.0);
+        let mut frame = Frame::new(_renderer, frame_size);
+
+        frame.scale(self.scale);
+
+        let start_x = bounds.width / 2.0;
+        let start_y = 50.0;
+        let node_spacing = 100.0;
+
+        self.draw_node(
+            &mut frame,
+            &self.root,
+            start_x,
+            start_y,
+            bounds.width * 2.0,
+            node_spacing,
+        );
+
+        vec![frame.into_geometry()]
+    }
+}
+
+impl ASTCanvas {
+    fn draw_node(
+        &self,
+        frame: &mut Frame,
+        node: &ASTNode,
+        x: f32,
+        y: f32,
+        x_offset: f32,
+        y_offset: f32,
+    ) {
+        let rectangle_size = Size::new(10.0 + 7.0 * node.value.len() as f32, 30.0);
+        let rectangle = Path::rectangle(
+            Point::new(x - (rectangle_size.width / 2.0), y),
+            rectangle_size,
+        );
+
+        frame.stroke(
+            &rectangle,
+            Stroke {
+                width: 2.0,
+                style: Style::Solid(Color::BLACK),
+                ..Stroke::default()
+            },
+        );
+
+        frame.fill_text(Text {
+            content: node.value.to_string(),
+            position: Point::new(x, y + 8.0),
+            color: Color::BLACK,
+            size: Pixels(14.0),
+            horizontal_alignment: Horizontal::Center,
+            ..Default::default()
+        });
+
+        // Draw children recursively
+        let num_children = node.children.len();
+        if num_children > 0 {
+            let step = (2.0 * x_offset) / (num_children as f32);
+            let mut child_x = x - x_offset + step / 2.0;
+
+            for child in &node.children {
+                // Draw line to child
+                let line = Path::line(
+                    Point::new(x, y + rectangle_size.height),
+                    Point::new(child_x, y + y_offset),
+                );
+                frame.stroke(
+                    &line,
+                    Stroke {
+                        width: 2.0,
+                        style: Style::Solid(Color::BLACK),
+                        ..Stroke::default()
+                    },
+                );
+
+                // Draw child
+                self.draw_node(
+                    frame,
+                    child,
+                    child_x,
+                    y + y_offset,
+                    x_offset / 2.0,
+                    y_offset,
+                );
+                child_x += step;
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
 struct Pane {
     id: usize,
-    is_pinned: bool,
 }
 
 impl Pane {
     fn new(id: usize) -> Pane {
         Self {
             id,
-            is_pinned: false,
         }
-    }
-}
-
-fn view_content<'a>(
-    pane: pane_grid::Pane,
-    total_panes: usize,
-    is_pinned: bool,
-    size: Size,
-) -> Element<'a, Message> {
-    let button: fn(&str, Message) -> Button<'_, Message> = |label, message| {
-        button(text(label).width(Fill).align_x(Center).size(16))
-            .width(Fill)
-            .padding(8)
-            .on_press(message)
-    };
-
-    let content = iced::widget::column![text!("{}x{}", size.width, size.height).size(24)]
-        .spacing(10)
-        .align_x(Center);
-
-    center_y(scrollable(content)).padding(5).into()
-}
-
-fn action<'a, Message: Clone + 'a>(
-    content: impl Into<Element<'a, Message>>,
-    label: &'a str,
-    on_press: Option<Message>,
-) -> Element<'a, Message> {
-    let action = button(center_x(content).width(30));
-
-    if let Some(on_press) = on_press {
-        tooltip(
-            action.on_press(on_press),
-            label,
-            tooltip::Position::FollowCursor,
-        )
-        .style(container::rounded_box)
-        .into()
-    } else {
-        action.style(button::secondary).into()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Error {
-    DialogClosed,
-    IoError(io::ErrorKind),
-}
-
-async fn open_file() -> Result<(PathBuf, Arc<String>), Error> {
-    let picked_file = rfd::AsyncFileDialog::new()
-        .set_title("Open a text file...")
-        .pick_file()
-        .await
-        .ok_or(Error::DialogClosed)?;
-
-    load_file(picked_file).await
-}
-
-async fn load_file(path: impl Into<PathBuf>) -> Result<(PathBuf, Arc<String>), Error> {
-    let path = path.into();
-
-    let contents = tokio::fs::read_to_string(&path)
-        .await
-        .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok((path, contents))
-}
-
-async fn save_file(path: Option<PathBuf>, contents: String) -> Result<PathBuf, Error> {
-    let path = if let Some(path) = path {
-        path
-    } else {
-        rfd::AsyncFileDialog::new()
-            .save_file()
-            .await
-            .as_ref()
-            .map(rfd::FileHandle::path)
-            .map(Path::to_owned)
-            .ok_or(Error::DialogClosed)?
-    };
-
-    tokio::fs::write(&path, contents)
-        .await
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok(path)
-}
-
-mod style {
-    use iced::font::Style;
-    use iced::widget::{container, text};
-    use iced::{Border, Element, Font, Theme};
-
-    pub fn pane_active(theme: &Theme) -> container::Style {
-        let palette = theme.extended_palette();
-
-        container::Style {
-            background: Some(palette.background.weak.color.into()),
-            border: Border {
-                width: 2.0,
-                color: palette.background.strong.color,
-                ..Border::default()
-            },
-            ..Default::default()
-        }
-    }
-
-    pub fn pane_focused(theme: &Theme) -> container::Style {
-        let palette = theme.extended_palette();
-
-        container::Style {
-            background: Some(palette.background.weak.color.into()),
-            border: Border {
-                width: 2.0,
-                color: palette.primary.strong.color,
-                ..Border::default()
-            },
-            ..Default::default()
-        }
-    }
-
-    pub(crate) fn new_icon<'a, Message>() -> Element<'a, Message> {
-        icon('\u{0e800}')
-    }
-
-    pub(crate) fn save_icon<'a, Message>() -> Element<'a, Message> {
-        icon('\u{0e801}')
-    }
-
-    pub(crate) fn open_icon<'a, Message>() -> Element<'a, Message> {
-        icon('\u{0f115}')
-    }
-
-    fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-        const ICON_FONT: Font = Font::with_name("editor-icons");
-
-        text(codepoint).font(ICON_FONT).into()
     }
 }

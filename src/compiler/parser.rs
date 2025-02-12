@@ -13,7 +13,7 @@ pub fn parse_program(tokens: &mut Vec<Token>) -> Result<AstProgram, ParserErr> {
     };
 
     if tokens.len() != 0 {
-        return Err(ParserErr("Syntax error!".to_string()));
+        Err(ParserErr("Syntax error!".to_string()))
     } else {
         Ok(AstProgram::Program(function))
     }
@@ -26,11 +26,12 @@ fn parse_function(tokens: &mut Vec<Token>) -> Result<AstFunctionDefinition, Pars
     let identifier = if let Some(Token::Identifier(identifier_name)) = tokens.first() {
         identifier_name.clone()
     } else {
-        return Err(ParserErr(format!(
-            "expected {:?}, got {:?}",
-            &Token::Identifier(String::new()),
-            tokens.first().unwrap()
-        )));
+        // return Err(ParserErr(format!(
+        //     "expected {:?}, got {:?}",
+        //     &Token::Identifier(String::new()),
+        //     tokens.first().unwrap()
+        // )));
+        return Err(ParserErr("Syntax error!".to_string()));
     };
     tokens.remove(0);
 
@@ -191,7 +192,11 @@ fn binary_op_precedence(binary_op: &Token) -> u8 {
 }
 
 pub fn expect(expected: &Token, tokens: &Vec<Token>) -> Result<(), ParserErr> {
-    let actual = tokens.first().unwrap();
+    let actual = match tokens.first() {
+        Some(token) => token,
+        None => return Err(ParserErr("Some err".to_string())),
+    };
+
 
     match (expected, actual) {
         (Token::Identifier(_), Token::Identifier(_)) => Ok(()),
