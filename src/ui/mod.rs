@@ -1,25 +1,30 @@
-mod utils;
-mod style;
 mod ast_canvas_converter;
-mod views;
 mod loader;
+mod style;
+mod utils;
+mod views;
 
 use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{self, container, horizontal_space, pick_list, responsive, text, text_editor, toggler};
+use iced::widget::{
+    self, container, horizontal_space, pick_list, responsive, text, text_editor, toggler,
+};
 use iced::{event, highlighter, mouse, Color, Event, Font, Pixels, Point, Subscription, Theme};
 use iced::{Center, Element, Fill, Size, Task};
+use std::collections::HashMap;
 
-use iced::alignment::{Horizontal};
-use iced::mouse::{Cursor, ScrollDelta};
-use iced::widget::canvas::{Frame, Geometry, Path, Program, Stroke, Style, Text};
-use std::path::{PathBuf};
-use std::sync::Arc;
-use iced::widget::text_editor::{Action, Edit};
 use crate::compiler::parser::parse_program;
 use crate::compiler::tokenizer::tokenize;
 use crate::ui::ast_canvas_converter::convert_into_ast_canvas;
 use crate::ui::utils::{open_file, save_file, Error};
 use crate::ui::views::{action, view_canvas, view_editor, view_loader};
+use iced::alignment::{Horizontal, Vertical};
+use iced::mouse::{Cursor, ScrollDelta};
+use iced::widget::canvas::{Frame, Geometry, Path, Program, Stroke, Style, Text};
+use iced::widget::text_editor::{Action, Edit};
+use reingold_tilford::Dimensions;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 pub(crate) fn run_ui() -> iced::Result {
     iced::application("AST Visualizer", ASTVisualizer::update, ASTVisualizer::view)
@@ -85,8 +90,9 @@ impl ASTVisualizer {
                 is_dirty: false,
                 is_ast_valid: false,
                 ast: ASTCanvas {
-                    root: example_ast(),
-                    scale: 1.0
+                    layout: None,
+                    root: None,
+                    scale: 1.0,
                 },
             },
             Task::batch([Task::done(Message::NewFile), widget::focus_next()]),
@@ -174,15 +180,12 @@ impl ASTVisualizer {
                 }
 
                 Task::none()
-            },
+            }
             Message::InsertTab => {
                 self.is_loading = true;
 
-                // let mut text = self.content.text();
-                // let (x, y) = self.content.cursor_position();
-                // text.insert_str(y, "    ");
-                // self.content = text_editor::Content::with_text(&text);
-                self.content.perform(Action::Edit(Edit::Paste(Arc::new("    ".to_string()))));
+                self.content
+                    .perform(Action::Edit(Edit::Paste(Arc::new("    ".to_string()))));
 
                 self.is_loading = false;
 
@@ -199,7 +202,7 @@ impl ASTVisualizer {
                 }
             }
             Message::ZoomCanvas(zoom) => {
-                self.ast.scale  = (self.ast.scale + zoom).clamp(0.5, 3.0);
+                self.ast.scale = (self.ast.scale + zoom).clamp(0.5, 3.0);
 
                 Task::none()
             }
@@ -212,7 +215,7 @@ impl ASTVisualizer {
                     Ok(tokens) => tokens,
                     Err(_) => {
                         self.is_ast_valid = false;
-                        return Task::none()
+                        return Task::none();
                     }
                 };
 
@@ -221,12 +224,20 @@ impl ASTVisualizer {
                     Ok(ast) => ast,
                     Err(_) => {
                         self.is_ast_valid = false;
-                        return Task::none()
+                        return Task::none();
                     }
                 };
 
                 // generate ast canvas
-                self.ast = convert_into_ast_canvas(&ast);
+                let root = convert_into_ast_canvas(&ast);
+
+                let layout = Some(reingold_tilford::layout(&Tree, &root));
+
+                self.ast = ASTCanvas {
+                    root: Some(root),
+                    layout,
+                    scale: 1.0,
+                };
 
                 Task::none()
             }
@@ -276,11 +287,10 @@ impl ASTVisualizer {
                 1 => {
                     if self.is_ast_valid {
                         view_canvas(&self.ast)
-                    }
-                    else {
+                    } else {
                         view_loader()
                     }
-                },
+                }
                 _ => todo!(),
             }))
             .style(if is_focused {
@@ -331,7 +341,7 @@ impl ASTVisualizer {
 
     fn subscription(&self) -> Subscription<Message> {
         event::listen().map(|event| {
-            if let Event::Mouse(mouse::Event::WheelScrolled{ delta} ) = event {
+            if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
                 match delta {
                     ScrollDelta::Lines { y, .. } => Message::ZoomCanvas(y * 0.1),
                     ScrollDelta::Pixels { y, .. } => Message::ZoomCanvas(y * 0.001),
@@ -341,64 +351,6 @@ impl ASTVisualizer {
             }
         })
     }
-}
-
-#[derive(Clone, Debug)]
-struct ASTNode {
-    value: String,
-    children: Vec<ASTNode>,
-}
-
-impl ASTNode {
-    fn new(value: String) -> Self {
-        Self {
-            value,
-            children: Vec::new(),
-        }
-    }
-}
-
-
-
-fn example_ast() -> ASTNode {
-    ASTNode {
-        value: "Program(function_definition)".to_string(),
-        children: vec![ASTNode {
-            value: "Function('main', body)".to_string(),
-            children: vec![
-                ASTNode {
-                    value: "Return(exp)".to_string(),
-                    children: vec![ASTNode {
-                        value: "Constant(2)".to_string(),
-                        children: vec![],
-                    }],
-                },
-                ASTNode {
-                    value: "Return(exp)".to_string(),
-                    children: vec![ASTNode {
-                        value: "Constant(2)".to_string(),
-                        children: vec![],
-                    }],
-                },
-            ],
-        }],
-    }
-}
-
-struct ASTCanvas {
-    root: ASTNode,
-    scale: f32
-}
-
-impl ASTCanvas {
-    fn new(root: ASTNode) -> ASTCanvas {
-        ASTCanvas {
-            root,
-            scale: 1.0
-        }
-    }
-
-    // fn new empty
 }
 
 impl<Message> Program<Message> for ASTCanvas {
@@ -411,25 +363,33 @@ impl<Message> Program<Message> for ASTCanvas {
         bounds: iced::Rectangle,
         _cursor: Cursor,
     ) -> Vec<Geometry> {
-        let frame_size = Size::new(3000.0, 2000.0);
-        let mut frame = Frame::new(_renderer, frame_size);
+        if let Some(root) = &self.root {
+            if let Some(layout) = &self.layout {
+                let mut frame = Frame::new(_renderer, bounds.size());
 
-        frame.scale(self.scale);
+                frame.scale(self.scale);
 
-        let start_x = bounds.width / 2.0;
-        let start_y = 50.0;
-        let node_spacing = 100.0;
+                let start_x = bounds.width / 2.0 - root.width / 2.0;
+                let start_y = 50.0;
+                let node_spacing = 100.0;
 
-        self.draw_node(
-            &mut frame,
-            &self.root,
-            start_x,
-            start_y,
-            bounds.width * 2.0,
-            node_spacing,
-        );
+                self.draw_node(
+                    &mut frame,
+                    root,
+                    layout,
+                    start_x,
+                    start_y,
+                    bounds.width * 2.0,
+                    node_spacing,
+                );
 
-        vec![frame.into_geometry()]
+                vec![frame.into_geometry()]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
     }
 }
 
@@ -437,15 +397,20 @@ impl ASTCanvas {
     fn draw_node(
         &self,
         frame: &mut Frame,
-        node: &ASTNode,
+        node: &Node,
+        layout: &HashMap<usize, reingold_tilford::Coordinate>,
         x: f32,
         y: f32,
         x_offset: f32,
         y_offset: f32,
     ) {
-        let rectangle_size = Size::new(10.0 + 7.0 * node.value.len() as f32, 30.0);
+        let coord = layout.get(&node.id).unwrap();
+        let rectangle_size = Size::new(node.width, 30.0);
         let rectangle = Path::rectangle(
-            Point::new(x - (rectangle_size.width / 2.0), y),
+            Point::new(
+                coord.x as f32 - node.width / 2.0 + x ,
+                (coord.y as f32 - 15.0) + y,
+            ),
             rectangle_size,
         );
 
@@ -460,10 +425,11 @@ impl ASTCanvas {
 
         frame.fill_text(Text {
             content: node.value.to_string(),
-            position: Point::new(x, y + 8.0),
+            position: Point::new(coord.x as f32 + x, coord.y as f32 + y),
             color: Color::BLACK,
             size: Pixels(14.0),
             horizontal_alignment: Horizontal::Center,
+            vertical_alignment: Vertical::Center,
             ..Default::default()
         });
 
@@ -474,10 +440,15 @@ impl ASTCanvas {
             let mut child_x = x - x_offset + step / 2.0;
 
             for child in &node.children {
+                let child_coord = layout.get(&child.id).unwrap();
+
                 // Draw line to child
                 let line = Path::line(
-                    Point::new(x, y + rectangle_size.height),
-                    Point::new(child_x, y + y_offset),
+                    Point::new(coord.x as f32 + x, coord.y as f32 + y + 15.0),
+                    Point::new(
+                        child_x + child_coord.x as f32,
+                        child_coord.y as f32 + y + y_offset - 15.0,
+                    ),
                 );
                 frame.stroke(
                     &line,
@@ -492,6 +463,7 @@ impl ASTCanvas {
                 self.draw_node(
                     frame,
                     child,
+                    layout,
                     child_x,
                     y + y_offset,
                     x_offset / 2.0,
@@ -510,8 +482,60 @@ struct Pane {
 
 impl Pane {
     fn new(id: usize) -> Pane {
+        Self { id }
+    }
+}
+
+extern crate reingold_tilford;
+
+#[derive(Debug, Clone)]
+pub struct ASTCanvas {
+    root: Option<Node>,
+    layout: Option<HashMap<usize, reingold_tilford::Coordinate>>,
+    scale: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct Tree;
+
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub id: usize,
+    pub children: Vec<Node>,
+    value: String,
+    width: f32,
+}
+
+impl Node {
+    fn new(value: String) -> Self {
+        let width = 10.0 + 7.0 * value.len() as f32;
+        static VAR_COUNTER: AtomicUsize = AtomicUsize::new(0);
         Self {
-            id,
+            id: VAR_COUNTER.fetch_add(1, Ordering::Relaxed),
+            value,
+            children: vec![],
+            width,
+        }
+    }
+}
+
+impl<'n> reingold_tilford::NodeInfo<&'n Node> for Tree {
+    type Key = usize;
+
+    fn key(&self, node: &'n Node) -> Self::Key {
+        node.id
+    }
+
+    fn children(&self, node: &'n Node) -> reingold_tilford::SmallVec<&'n Node> {
+        node.children.iter().collect()
+    }
+
+    fn dimensions(&self, node: &'n Node) -> reingold_tilford::Dimensions {
+        Dimensions {
+            top: 15.0,
+            right: (node.width / 2.0) as f64,
+            bottom: 15.0,
+            left: (node.width / 2.0) as f64,
         }
     }
 }

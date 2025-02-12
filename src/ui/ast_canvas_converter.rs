@@ -1,8 +1,8 @@
 use crate::storage::ast::{AstBinaryOp, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp};
-use crate::ui::{ASTCanvas, ASTNode};
+use crate::ui::Node;
 
-pub(crate) fn convert_into_ast_canvas(ast: &AstProgram) -> ASTCanvas {
-    let mut root = ASTNode::new("Program(function_definition)".to_string());
+pub(crate) fn convert_into_ast_canvas(ast: &AstProgram) -> Node {
+    let mut root = Node::new("Program(function_definition)".to_string());
 
     match ast {
         AstProgram::Program(function) => {
@@ -10,13 +10,13 @@ pub(crate) fn convert_into_ast_canvas(ast: &AstProgram) -> ASTCanvas {
         }
     }
 
-    ASTCanvas::new(root)
+    root
 }
 
-fn convert_ast_function(ast_function: &AstFunctionDefinition) -> ASTNode {
+fn convert_ast_function(ast_function: &AstFunctionDefinition) -> Node {
     match ast_function {
         AstFunctionDefinition::Function(identifier, statement) => {
-            let mut function = ASTNode::new(format!("Function('{}', body)", identifier));
+            let mut function = Node::new(format!("Function('{}', body)", identifier));
             function.children.push(convert_ast_statement(statement));
 
             function
@@ -24,10 +24,10 @@ fn convert_ast_function(ast_function: &AstFunctionDefinition) -> ASTNode {
     }
 }
 
-fn convert_ast_statement(ast_statement: &AstStatement) -> ASTNode {
+fn convert_ast_statement(ast_statement: &AstStatement) -> Node {
     match ast_statement {
         AstStatement::Return(expr) => {
-            let mut statement = ASTNode::new("Return(exp)".to_string());
+            let mut statement = Node::new("Return(exp)".to_string());
             statement.children.push(convert_ast_expression(expr));
 
             statement
@@ -35,29 +35,29 @@ fn convert_ast_statement(ast_statement: &AstStatement) -> ASTNode {
     }
 }
 
-fn convert_ast_expression(ast_expression: &AstExpression) -> ASTNode {
+fn convert_ast_expression(ast_expression: &AstExpression) -> Node {
     match ast_expression {
         AstExpression::Constant(num) => {
-            ASTNode::new(format!("Constant({})", num))
+            Node::new(format!("Constant({})", num))
         }
         AstExpression::Binary(operator, left, right) => {
-            let mut binary_node = ASTNode::new("Binary(operator, left, right)".to_string());
+            let mut binary_node = Node::new("Binary(operator, left, right)".to_string());
             binary_node.children.push(convert_ast_expression(left));
 
             let operator_node = match operator {
-                AstBinaryOp::Add => ASTNode::new("Add".into()),
-                AstBinaryOp::And => ASTNode::new("And".into()),
-                AstBinaryOp::Divide => ASTNode::new("Divide".into()),
-                AstBinaryOp::Equal => ASTNode::new("Equal".into()),
-                AstBinaryOp::GreaterOrEqual => ASTNode::new("GreaterOrEqual".into()),
-                AstBinaryOp::GreaterThan => ASTNode::new("GreaterThan".into()),
-                AstBinaryOp::LessOrEqual => ASTNode::new("LessOrEqual".into()),
-                AstBinaryOp::LessThan => ASTNode::new("LessThan".into()),
-                AstBinaryOp::Multiply => ASTNode::new("Multiply".into()),
-                AstBinaryOp::NotEqual => ASTNode::new("NotEqual".into()),
-                AstBinaryOp::Or => ASTNode::new("Or".into()),
-                AstBinaryOp::Remainder => ASTNode::new("Remainder".into()),
-                AstBinaryOp::Subtract => ASTNode::new("Subtract".into())
+                AstBinaryOp::Add => Node::new("Add".into()),
+                AstBinaryOp::And => Node::new("And".into()),
+                AstBinaryOp::Divide => Node::new("Divide".into()),
+                AstBinaryOp::Equal => Node::new("Equal".into()),
+                AstBinaryOp::GreaterOrEqual => Node::new("GreaterOrEqual".into()),
+                AstBinaryOp::GreaterThan => Node::new("GreaterThan".into()),
+                AstBinaryOp::LessOrEqual => Node::new("LessOrEqual".into()),
+                AstBinaryOp::LessThan => Node::new("LessThan".into()),
+                AstBinaryOp::Multiply => Node::new("Multiply".into()),
+                AstBinaryOp::NotEqual => Node::new("NotEqual".into()),
+                AstBinaryOp::Or => Node::new("Or".into()),
+                AstBinaryOp::Remainder => Node::new("Remainder".into()),
+                AstBinaryOp::Subtract => Node::new("Subtract".into())
             };
 
             binary_node.children.push(operator_node);
@@ -66,12 +66,12 @@ fn convert_ast_expression(ast_expression: &AstExpression) -> ASTNode {
             binary_node
         }
         AstExpression::Unary(operator, expr) => {
-            let mut unary_node = ASTNode::new("Unary(operator, expr)".into());
+            let mut unary_node = Node::new("Unary(operator, expr)".into());
 
             let operator_node = match operator {
-                AstUnaryOp::Not => ASTNode::new("Not".into()),
-                AstUnaryOp::Complement => ASTNode::new("Complement".into()),
-                AstUnaryOp::Negate => ASTNode::new("Negate".into()),
+                AstUnaryOp::Not => Node::new("Not".into()),
+                AstUnaryOp::Complement => Node::new("Complement".into()),
+                AstUnaryOp::Negate => Node::new("Negate".into()),
             };
 
             unary_node.children.push(operator_node);
