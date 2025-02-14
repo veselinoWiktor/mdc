@@ -22,16 +22,23 @@ pub struct Settings {
     pub parse: bool,
 
     #[structopt(
+        short = "v",
+        long = "validate",
+        help = "Directs it to run the tokenizer, parser and semantics validation, but stop before assembly generation"
+    )]
+    pub validate: bool,
+
+    #[structopt(
         short = "t",
         long = "tacky",
-        help = "Directs it to run the tokenizer, parser and tacky generation, but stop before assembly generation"
+        help = "Directs it to run the tokenizer, parser, semantics validation and tacky generation, but stop before assembly generation"
     )]
     pub tacky: bool,
 
     #[structopt(
         short = "c",
         long = "codegen",
-        help = "Directs it to perform tokenizer, parsing, tacky generation and assembly generation, but stop before code emission"
+        help = "Directs it to perform tokenizer, parsing, semantics validation, tacky generation and assembly generation, but stop before code emission"
     )]
     pub codegen: bool,
 

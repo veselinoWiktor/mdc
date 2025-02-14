@@ -16,6 +16,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use structopt::StructOpt;
+use crate::compiler::semantics::variable_resolution::resolve_program;
 
 pub fn main() -> iced::Result {
     run_ui()
@@ -76,6 +77,18 @@ fn production_config() {
     };
 
     if options.parse {
+        return;
+    }
+
+    let ast = match resolve_program(ast) {
+        Ok(ast) => {
+            println!("AST:\n{:?}", ast);
+            ast
+        }
+        Err(err) => panic!("{:?}", err),
+    };
+
+    if options.validate {
         return;
     }
 

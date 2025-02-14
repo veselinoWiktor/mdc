@@ -1,7 +1,6 @@
 use crate::compiler::token::Token;
-use crate::storage::ast::{
-    AstBinaryOp, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp,
-};
+use crate::storage::ast::{AstBinaryOp, AstBlockItem, AstDeclaration, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp};
+use crate::storage::ast::AstExpression::Assignment;
 
 #[derive(Debug, PartialEq)]
 pub struct ParserErr(String);
@@ -45,36 +44,90 @@ fn parse_function(tokens: &mut Vec<Token>) -> Result<AstFunctionDefinition, Pars
         tokens,
     )?;
 
-    let statement = match parse_statement(tokens) {
-        Ok(exp) => exp,
-        Err(err) => return Err(err),
-    };
+    let mut function_body = vec![];
+
+    while tokens.first() != Some(&Token::CloseBrace) {
+        let next_block_item = parse_block_item(tokens)?;
+        function_body.push(next_block_item);
+    }
+
+    // let statement = match parse_statement(tokens) {
+    //     Ok(exp) => exp,
+    //     Err(err) => return Err(err),
+    // };
 
     expect(&Token::CloseBrace, tokens)?;
     tokens.remove(0);
 
-    Ok(AstFunctionDefinition::Function(identifier, statement))
+    Ok(AstFunctionDefinition::Function(identifier, function_body))
+}
+
+fn parse_block_item(tokens: &mut Vec<Token>) -> Result<AstBlockItem, ParserErr> {
+    if tokens.first() == Some(&Token::Integer) {
+        Ok(AstBlockItem::Declaration(parse_declaration(tokens)?))
+    }
+    else {
+        Ok(AstBlockItem::Statement(parse_statement(tokens)?))
+    }
+}
+
+fn parse_declaration(tokens: &mut Vec<Token>) -> Result<AstDeclaration, ParserErr> {
+    expect(&Token::Integer, tokens)?;
+    tokens.remove(0);
+
+    let identifier = if let Some(Token::Identifier(identifier_name)) = tokens.first() {
+        identifier_name.clone()
+    } else {
+        return Err(ParserErr("Syntax error!".to_string()));
+    };
+    tokens.remove(0);
+
+    let expression;
+    if tokens.first() == Some(&Token::Equal) {
+        tokens.remove(0);
+        expression = Some(parse_expression(tokens, 0)?);
+    } else {
+        expression = None;
+    };
+
+
+    expect(&Token::Semicolon, tokens)?;
+    tokens.remove(0);
+
+    Ok(AstDeclaration::Declaration(identifier, expression))
 }
 
 fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
-    match expect(&Token::Return, tokens) {
-        Ok(()) => tokens.remove(0),
-        Err(err) => return Err(err),
-    };
+    if tokens.first() == Some(&Token::Return) {
+        tokens.remove(0);
 
-    let return_val = match parse_expression(tokens, 0) {
-        Ok(exp) => {
-            exp
-        }
-        Err(err) => return Err(err),
-    };
+        let return_val = match parse_expression(tokens, 0) {
+            Ok(exp) => {
+                exp
+            }
+            Err(err) => return Err(err),
+        };
 
-    match expect(&Token::Semicolon, tokens) {
-        Err(err) => return Err(err),
-        _ => tokens.remove(0),
-    };
+        match expect(&Token::Semicolon, tokens) {
+            Err(err) => return Err(err),
+            _ => tokens.remove(0),
+        };
 
-    Ok(AstStatement::Return(return_val))
+        Ok(AstStatement::Return(return_val))
+    }
+    else if tokens.first() == Some(&Token::Semicolon) {
+        tokens.remove(0);
+        
+        Ok(AstStatement::Null)
+    }
+    else {
+        let expression = parse_expression(tokens, 0)?;
+        
+        expect(&Token::Semicolon, tokens)?;
+        tokens.remove(0);
+        
+        Ok(AstStatement::Expression(expression))
+    }
 }
 
 /// ```<exp> ::= <int> | <unop> <exp> | "(" <exp> ")"```
@@ -83,7 +136,8 @@ fn parse_expression(tokens: &mut Vec<Token>, min_prec: u8) -> Result<AstExpressi
     tokens.remove(0);
 
     while let Some(
-        token @ Token::Plus
+        token @ Token::Equal
+        | token @ Token::Plus
         | token @ Token::Hyphen
         | token @ Token::Asterisk
         | token @ Token::ForwardSlash
@@ -100,10 +154,19 @@ fn parse_expression(tokens: &mut Vec<Token>, min_prec: u8) -> Result<AstExpressi
     {
         let curr_prec = binary_op_precedence(token);
         if curr_prec >= min_prec {
-            let operator = parse_binary_operator(tokens)?;
-            tokens.remove(0);
-            let right = parse_expression(tokens, curr_prec + 1)?;
-            left = AstExpression::Binary(operator, Box::new(left), Box::new(right));
+            match token {
+                Token::Equal => {
+                    tokens.remove(0);
+                    let right = parse_expression(tokens, curr_prec)?;
+                    left = Assignment(Box::new(left), Box::new(right));
+                },
+                _ => {
+                    let operator = parse_binary_operator(tokens)?;
+                    tokens.remove(0);
+                    let right = parse_expression(tokens, curr_prec + 1)?;
+                    left = AstExpression::Binary(operator, Box::new(left), Box::new(right));
+                }
+            }
         } else {
             break;
         }
@@ -115,6 +178,7 @@ fn parse_expression(tokens: &mut Vec<Token>, min_prec: u8) -> Result<AstExpressi
 fn parse_factor(tokens: &mut Vec<Token>) -> Result<AstExpression, ParserErr> {
     match tokens.first() {
         Some(token) => match token {
+            Token::Identifier(identifier) => Ok(AstExpression::Var(identifier.clone())),
             Token::Constant(num) => Ok(AstExpression::Constant(num.clone())),
             Token::Tilde | Token::Hyphen | Token::LogicalNot => {
                 let operator = parse_unary_operator(tokens)?;
@@ -187,6 +251,7 @@ fn binary_op_precedence(binary_op: &Token) -> u8 {
         Token::LogicalEqual | Token::LogicalNotEqual => 35,
         Token::LogicalAnd => 10,
         Token::LogicalOr => 5,
+        Token::Equal => 1,
         _ => unreachable!(),
     }
 }
@@ -235,7 +300,7 @@ mod tests {
         expect, parse_expression, parse_function, parse_program, parse_statement, ParserErr,
     };
     use crate::compiler::token::Token;
-    use crate::storage::ast::{AstExpression, AstFunctionDefinition, AstProgram, AstStatement};
+    use crate::storage::ast::{AstBlockItem, AstExpression, AstFunctionDefinition, AstProgram, AstStatement};
 
     #[test]
     fn expect_basic_pass() {
@@ -391,7 +456,7 @@ mod tests {
             statement,
             Ok(AstFunctionDefinition::Function(
                 "main".to_string(),
-                AstStatement::Return(AstExpression::Constant(2))
+                vec![AstBlockItem::Statement(AstStatement::Return(AstExpression::Constant(2)))]
             ))
         );
         assert_eq!(tokens, vec![]);
@@ -458,7 +523,7 @@ mod tests {
             statement,
             Ok(AstProgram::Program(AstFunctionDefinition::Function(
                 "main".to_string(),
-                AstStatement::Return(AstExpression::Constant(2))
+                vec![AstBlockItem::Statement(AstStatement::Return(AstExpression::Constant(2)))]
             )))
         );
     }

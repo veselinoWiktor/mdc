@@ -5,7 +5,7 @@ use crate::{
     },
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crate::storage::ast::AstBinaryOp;
+use crate::storage::ast::{AstBinaryOp, AstBlockItem, AstDeclaration};
 use crate::storage::tacky::BinaryOp;
 
 pub fn emit_tacky(program: AstProgram) -> Program {
@@ -18,8 +18,23 @@ pub fn emit_tacky(program: AstProgram) -> Program {
 
 fn emit_tacky_function(function: AstFunctionDefinition) -> FunctionDefinition {
     match function {
-        AstFunctionDefinition::Function(name, statement) => {
-            FunctionDefinition::Function(name, emit_tacky_statement(statement))
+        AstFunctionDefinition::Function(name, body) => {
+            let mut result_instructions = vec![];
+
+            for block_item in body {
+                match block_item {
+                    AstBlockItem::Declaration(declaration) => {
+                        result_instructions.append(&mut emit_tacky_declaration(declaration));
+                    },
+                    AstBlockItem::Statement(statement) => {
+                        result_instructions.append(&mut emit_tacky_statement(statement));
+                    }
+                }
+            }
+
+            result_instructions.push(Instruction::Return(Val::Constant(0)));
+
+            FunctionDefinition::Function(name, result_instructions)
         }
     }
 }
@@ -30,6 +45,26 @@ fn emit_tacky_statement(statement: AstStatement) -> Vec<Instruction> {
             let (mut instructions, var) = emit_tacky_expression(expression);
             instructions.push(Instruction::Return(var));
             instructions
+        }
+        AstStatement::Expression(expression) => {
+            let (instructions, var) = emit_tacky_expression(expression);
+            instructions
+        }
+        AstStatement::Null => vec![]
+    }
+}
+
+fn emit_tacky_declaration(declaration: AstDeclaration) -> Vec<Instruction> {
+    match declaration {
+        AstDeclaration::Declaration(identifier, init) => {
+            if let None = init {
+                vec![]
+            } else {
+                let (mut instructions, var) = emit_tacky_expression(init.unwrap());
+
+                instructions.push(Instruction::Copy(var, Val::Var(identifier)));
+                instructions
+            }
         }
     }
 }
@@ -107,6 +142,18 @@ fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
             left_instructions.append(&mut right_instructions);
             left_instructions.push(Instruction::Binary(tacky_op, v1, v2, dst.clone()));
             (left_instructions, dst)
+        },
+        AstExpression::Var(identifier) => (vec![], Val::Var(identifier)),
+        AstExpression::Assignment(var , rhs) => {
+            let (mut instructions, result) = emit_tacky_expression(*rhs);
+
+            match *var {
+                AstExpression::Var(var_name) => {
+                    instructions.push(Instruction::Copy(result, Val::Var(var_name.clone())));
+                    (instructions, Val::Var(var_name.clone()))
+                }
+                _ => unreachable!()
+            }
         }
     }
 }

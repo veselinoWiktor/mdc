@@ -1,4 +1,4 @@
-use crate::storage::ast::{AstBinaryOp, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp};
+use crate::storage::ast::{AstBinaryOp, AstBlockItem, AstDeclaration, AstExpression, AstFunctionDefinition, AstProgram, AstStatement, AstUnaryOp};
 use crate::ui::Node;
 
 pub(crate) fn convert_into_ast_canvas(ast: &AstProgram) -> Node {
@@ -15,11 +15,40 @@ pub(crate) fn convert_into_ast_canvas(ast: &AstProgram) -> Node {
 
 fn convert_ast_function(ast_function: &AstFunctionDefinition) -> Node {
     match ast_function {
-        AstFunctionDefinition::Function(identifier, statement) => {
+        AstFunctionDefinition::Function(identifier, body) => {
             let mut function = Node::new(format!("Function('{}', body)", identifier));
-            function.children.push(convert_ast_statement(statement));
+
+            for block_item in body {
+                match block_item {
+                    AstBlockItem::Declaration(declaration) => {
+                        function.children.push(convert_ast_declaration(declaration))
+                    },
+                    AstBlockItem::Statement(statement) => {
+                        function.children.push(convert_ast_statement(statement))
+                    }
+                }
+            }
 
             function
+        }
+    }
+}
+
+fn convert_ast_declaration(ast_declaration: &AstDeclaration) -> Node {
+    match ast_declaration {
+        AstDeclaration::Declaration(identifier, expression) => {
+            match expression {
+                Some(expr) => {
+                    let mut declaration = Node::new(format!("{}=exp", identifier));
+                    declaration.children.push(convert_ast_expression(expr));
+
+                    declaration
+                },
+                None => {
+                    let declaration = Node::new(format!("{}", identifier));
+                    declaration
+                }
+            }
         }
     }
 }
@@ -32,6 +61,15 @@ fn convert_ast_statement(ast_statement: &AstStatement) -> Node {
 
             statement
         },
+        AstStatement::Expression(expr) => {
+            let mut expression = Node::new("ExprStatement(exp)".to_string());
+            expression.children.push(convert_ast_expression(expr));
+
+            expression
+        },
+        AstStatement::Null => {
+            Node::new("Null".to_string())
+        }
     }
 }
 
@@ -78,6 +116,16 @@ fn convert_ast_expression(ast_expression: &AstExpression) -> Node {
             unary_node.children.push(convert_ast_expression(expr));
 
             unary_node
+        },
+        AstExpression::Var(identifier) => {
+            Node::new(format!("Var({})", identifier))
+        },
+        AstExpression::Assignment(identifier, expression) => {
+            let mut assignment = Node::new(format!("Assignment(ident, expr)"));
+            assignment.children.push(convert_ast_expression(&*identifier));
+            assignment.children.push(convert_ast_expression(&*expression));
+
+            assignment
         }
     }
 }
