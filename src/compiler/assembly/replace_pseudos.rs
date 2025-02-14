@@ -72,7 +72,25 @@ fn replace_pseudos_in_instruction(mut state: ReplacementState, instruction: Asse
         }
         AssemblyInstruction::Cdq => {
             (state, AssemblyInstruction::Cdq)
-        }
+        },
+        AssemblyInstruction::Cmp(src, dst) => {
+            let new_src = replace_operand(&mut state, src);
+            let new_dst = replace_operand(&mut state, dst);
+            (state, AssemblyInstruction::Cmp(new_src, new_dst))
+        },
+        AssemblyInstruction::SetCC(condition, dst) => {
+            let new_dst = replace_operand(&mut state, dst);
+            (state, AssemblyInstruction::SetCC(condition, new_dst))
+        },
+        AssemblyInstruction::Label(identifier) => {
+            (state, AssemblyInstruction::Label(identifier))
+        },
+        AssemblyInstruction::JmpCC(condition, target) => {
+            (state, AssemblyInstruction::JmpCC(condition, target))
+        },
+        AssemblyInstruction::Jmp(target) => {
+            (state, AssemblyInstruction::Jmp(target))
+        },
         AssemblyInstruction::AllocateStack(_) => {
             panic!("Internal error: AllocateStack shouldn't be present at this point")
         }

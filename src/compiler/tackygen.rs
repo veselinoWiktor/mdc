@@ -52,7 +52,9 @@ fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
             (inner_instructions, dst)
         }
         AstExpression::Binary(AstBinaryOp::And, left, right) => {
-            let jump_name = format!("and_false{}", AND_COUNTER.fetch_add(1, Ordering::Relaxed));
+            let label_counter = AND_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+            let jump_name = format!("and_false{}", label_counter);
 
             let (mut left_instructions ,v1) = emit_tacky_expression(*left);
             left_instructions.push(Instruction::JumpIfZero(v1, jump_name.clone()));
@@ -65,15 +67,17 @@ fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
             let res = Val::Var(res_name);
 
             left_instructions.push(Instruction::Copy(Val::Constant(1), res.clone()));
-            left_instructions.push(Instruction::Jump("end".to_string()));
+            left_instructions.push(Instruction::Jump(format!("and_false_end{}", label_counter).to_string()));
             left_instructions.push(Instruction::Label(jump_name));
             left_instructions.push(Instruction::Copy(Val::Constant(0), res.clone()));
-            left_instructions.push(Instruction::Label("end".to_string()));
+            left_instructions.push(Instruction::Label(format!("and_false_end{}", label_counter).to_string()));
 
             (left_instructions, res)
         },
         AstExpression::Binary(AstBinaryOp::Or, left, right) => {
-            let jump_name = format!("or_false{}", OR_COUNTER.fetch_add(1, Ordering::Relaxed));
+            let label_counter = OR_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+            let jump_name = format!("or_false{}",label_counter);
 
             let (mut left_instructions ,v1) = emit_tacky_expression(*left);
             left_instructions.push(Instruction::JumpIfNotZero(v1, jump_name.clone()));
@@ -85,11 +89,11 @@ fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
             let res_name = format!("tmp.{}", VAR_COUNTER.fetch_add(1, Ordering::Relaxed));
             let res = Val::Var(res_name);
 
-            left_instructions.push(Instruction::Copy(Val::Constant(1), res.clone()));
-            left_instructions.push(Instruction::Jump("end".to_string()));
-            left_instructions.push(Instruction::Label(jump_name.clone()));
             left_instructions.push(Instruction::Copy(Val::Constant(0), res.clone()));
-            left_instructions.push(Instruction::Label("end".to_string()));
+            left_instructions.push(Instruction::Jump(format!("or_false_end{}", label_counter).to_string()));
+            left_instructions.push(Instruction::Label(jump_name.clone()));
+            left_instructions.push(Instruction::Copy(Val::Constant(1), res.clone()));
+            left_instructions.push(Instruction::Label(format!("or_false_end{}", label_counter).to_string()));
 
             (left_instructions, res)
         },

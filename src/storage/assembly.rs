@@ -13,8 +13,13 @@ pub enum AssemblyInstruction {
     Mov(AssemblyOperand, AssemblyOperand),
     Unary(AssemblyUnaryOp, AssemblyOperand),
     Binary(AssemblyBinaryOp, AssemblyOperand, AssemblyOperand),
+    Cmp(AssemblyOperand, AssemblyOperand),
     Idiv(AssemblyOperand),
     Cdq,
+    Jmp(String), // Jmp(identifier)
+    JmpCC(AssemblyCondition, String), // identifier
+    SetCC(AssemblyCondition, AssemblyOperand),
+    Label(String),
     AllocateStack(i32),
     Ret
 }
@@ -38,6 +43,16 @@ pub enum AssemblyOperand {
     Reg(AssemblyRegister),
     PseudoReg(String),
     Stack(i32)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AssemblyCondition {
+    E, // Equal
+    NE, // Not equal
+    G, // Greater
+    GE, // Greater or equal
+    L, // Less
+    LE, // Less or equal
 }
 
 #[derive(Debug, PartialEq)]

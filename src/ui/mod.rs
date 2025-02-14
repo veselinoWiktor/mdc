@@ -6,9 +6,11 @@ mod views;
 
 use iced::widget::pane_grid::{self, PaneGrid};
 use iced::widget::{
-    self, container, horizontal_space, pick_list, responsive, text, text_editor, toggler,
+    self, canvas, container, horizontal_space, pick_list, responsive, text, text_editor, toggler,
 };
-use iced::{event, highlighter, mouse, Color, Event, Font, Pixels, Point, Subscription, Theme};
+use iced::{highlighter, mouse, Color, Event, Font, Pixels, Point, Rectangle, Theme,
+    Vector,
+};
 use iced::{Center, Element, Fill, Size, Task};
 use std::collections::HashMap;
 
@@ -18,20 +20,24 @@ use crate::ui::ast_canvas_converter::convert_into_ast_canvas;
 use crate::ui::utils::{open_file, save_file, Error};
 use crate::ui::views::{action, view_canvas, view_editor, view_loader};
 use iced::alignment::{Horizontal, Vertical};
-use iced::mouse::{Cursor, ScrollDelta};
+use iced::mouse::{Cursor};
 use iced::widget::canvas::{Frame, Geometry, Path, Program, Stroke, Style, Text};
 use iced::widget::text_editor::{Action, Edit};
 use reingold_tilford::Dimensions;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use crate::compiler::assembly::codegen::gen;
+use crate::compiler::assembly::instruction_fixup::fixup_program;
+use crate::compiler::assembly::replace_pseudos::replace_pseudos;
+use crate::compiler::emit::emit_assembly;
+use crate::compiler::tackygen::emit_tacky;
 
 pub(crate) fn run_ui() -> iced::Result {
     iced::application("AST Visualizer", ASTVisualizer::update, ASTVisualizer::view)
         .theme(ASTVisualizer::theme)
         .font(include_bytes!("fonts/icons.ttf").as_slice())
         .default_font(Font::MONOSPACE)
-        .subscription(ASTVisualizer::subscription)
         .antialiasing(true)
         .run_with(ASTVisualizer::new)
 }
@@ -69,11 +75,13 @@ enum Message {
     CompileCode,
 
     // AST Canvas
-    ZoomCanvas(f32),
+    Translated(Vector),
+    Scaled(f32, Option<Vector>),
     GenerateAstCanvas,
 }
 
 impl ASTVisualizer {
+
     fn new() -> (Self, Task<Message>) {
         let pane = Pane::new(0);
         let (mut panes, pane) = pane_grid::State::new(pane);
@@ -92,7 +100,8 @@ impl ASTVisualizer {
                 ast: ASTCanvas {
                     layout: None,
                     root: None,
-                    scale: 1.0,
+                    scaling: 1.0,
+                    translation: Vector::default(),
                 },
             },
             Task::batch([Task::done(Message::NewFile), widget::focus_next()]),
@@ -111,8 +120,6 @@ impl ASTVisualizer {
 
                 self.content.perform(action);
 
-                // here should be the update of the tree canvas
-                // get the text
                 Task::done(Message::GenerateAstCanvas)
             }
             Message::ThemeSelected(theme) => {
@@ -193,16 +200,42 @@ impl ASTVisualizer {
             }
             Message::CompileCode => {
                 if self.is_loading {
-                    Task::none()
-                } else {
-                    self.is_loading = true;
+                    return Task::none()
+                }
 
-                    //let mut text = self.content.text();
+                if self.is_ast_valid {
+                    let text = self.content.text();
+
+                    let mut tokens = tokenize(&text).unwrap();
+                    let ast_program = parse_program(&mut tokens).unwrap();
+                    let tacky_ast = emit_tacky(ast_program);
+                    let codegen_ast = gen(tacky_ast);
+                    let replace_pseudos_ast = replace_pseudos(codegen_ast);
+                    let fixup_ast = fixup_program(replace_pseudos_ast.1, replace_pseudos_ast.0);
+                    let mut assembly_source_code = emit_assembly(fixup_ast);
+
+                    if let Some(ending) = self.content.line_ending() {
+                        if !assembly_source_code.ends_with(ending.as_str()) {
+                            assembly_source_code.push_str(ending.as_str());
+                        }
+                    }
+
+                    Task::perform(save_file(None, assembly_source_code), Message::FileSaved)
+                } else {
                     Task::none()
                 }
+            },
+            Message::Translated(translation) => {
+                self.ast.translation = translation;
+
+                Task::none()
             }
-            Message::ZoomCanvas(zoom) => {
-                self.ast.scale = (self.ast.scale + zoom).clamp(0.5, 3.0);
+            Message::Scaled(scaling, translation) => {
+                self.ast.scaling = scaling;
+
+                if let Some(translation) = translation {
+                    self.ast.translation = translation;
+                }
 
                 Task::none()
             }
@@ -236,7 +269,8 @@ impl ASTVisualizer {
                 self.ast = ASTCanvas {
                     root: Some(root),
                     layout,
-                    scale: 1.0,
+                    scaling: 1.0,
+                    translation: Vector::default(),
                 };
 
                 Task::none()
@@ -260,7 +294,7 @@ impl ASTVisualizer {
             action(
                 style::compiler_icon(),
                 "Compile code",
-                self.is_dirty.then_some(Message::CompileCode)
+                self.is_ast_valid.then_some(Message::CompileCode)
             ),
             horizontal_space(),
             toggler(self.word_wrap)
@@ -338,23 +372,129 @@ impl ASTVisualizer {
             Theme::Light
         }
     }
+}
 
-    fn subscription(&self) -> Subscription<Message> {
-        event::listen().map(|event| {
-            if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
-                match delta {
-                    ScrollDelta::Lines { y, .. } => Message::ZoomCanvas(y * 0.1),
-                    ScrollDelta::Pixels { y, .. } => Message::ZoomCanvas(y * 0.001),
-                }
-            } else {
-                Message::ZoomCanvas(0.0)
-            }
-        })
+pub enum Interaction {
+    None,
+    Panning { translation: Vector, start: Point },
+}
+
+impl Default for Interaction {
+    fn default() -> Self {
+        Self::None
     }
 }
 
-impl<Message> Program<Message> for ASTCanvas {
-    type State = ();
+impl Program<Message> for ASTCanvas {
+    type State = Interaction;
+
+    fn update(
+        &self,
+        interaction: &mut Interaction,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: Cursor,
+    ) -> Option<widget::Action<Message>> {
+        if let Event::Mouse(mouse::Event::ButtonReleased(_)) = event {
+            *interaction = Interaction::None;
+        }
+
+        let cursor_position = cursor.position_in(bounds)?;
+
+        match event {
+            Event::Mouse(mouse_event) => match mouse_event {
+                mouse::Event::ButtonPressed(button) => {
+                    let message = match button {
+                        mouse::Button::Right => {
+                            *interaction = Interaction::Panning {
+                                translation: self.translation,
+                                start: cursor_position,
+                            };
+
+                            None
+                        }
+                        _ => None,
+                    };
+
+                    Some(
+                        message
+                            .map(canvas::Action::publish)
+                            .unwrap_or(canvas::Action::request_redraw())
+                            .and_capture(),
+                    )
+                }
+                mouse::Event::CursorMoved { .. } => {
+                    let message = match *interaction {
+                        Interaction::None => None,
+                        Interaction::Panning { translation, start } => {
+                            Some(Message::Translated(
+                                translation + (cursor_position - start) * (1.0 / self.scaling),
+                            ))
+                        }
+                    };
+
+                    let action = message
+                        .map(canvas::Action::publish)
+                        .unwrap_or(canvas::Action::request_redraw());
+
+                    Some(match interaction {
+                        Interaction::None => action,
+                        _ => action.and_capture(),
+                    })
+                }
+                mouse::Event::WheelScrolled { delta } => match *delta {
+                    mouse::ScrollDelta::Lines { y, .. }
+                    | mouse::ScrollDelta::Pixels { y, .. } => {
+                        if y < 0.0 && self.scaling > Self::MIN_SCALING
+                            || y > 0.0 && self.scaling < Self::MAX_SCALING
+                        {
+                            let old_scaling = self.scaling;
+
+                            let scaling = (self.scaling * (1.0 + y / 30.0))
+                                .clamp(
+                                    Self::MIN_SCALING,
+                                    Self::MAX_SCALING,
+                                );
+
+                            let translation =
+                                if let Some(cursor_to_center) =
+                                    cursor.position_from(bounds.center())
+                                {
+                                    let factor = scaling - old_scaling;
+
+                                    Some(
+                                        self.translation
+                                            - Vector::new(
+                                            cursor_to_center.x * factor
+                                                / (old_scaling
+                                                * old_scaling),
+                                            cursor_to_center.y * factor
+                                                / (old_scaling
+                                                * old_scaling),
+                                        ),
+                                    )
+                                } else {
+                                    None
+                                };
+
+                            Some(
+                                canvas::Action::publish(Message::Scaled(
+                                    scaling,
+                                    translation,
+                                ))
+                                    .and_capture(),
+                            )
+                        } else {
+                            Some(canvas::Action::capture())
+                        }
+                    }
+                },
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn draw(
         &self,
         _state: &Self::State,
@@ -367,7 +507,8 @@ impl<Message> Program<Message> for ASTCanvas {
             if let Some(layout) = &self.layout {
                 let mut frame = Frame::new(_renderer, bounds.size());
 
-                frame.scale(self.scale);
+                frame.scale(self.scaling);
+                frame.translate(self.translation);
 
                 let start_x = bounds.width / 2.0 - root.width / 2.0;
                 let start_y = 50.0;
@@ -394,6 +535,9 @@ impl<Message> Program<Message> for ASTCanvas {
 }
 
 impl ASTCanvas {
+    const MIN_SCALING: f32 = 0.5;
+    const MAX_SCALING: f32 = 3.0;
+
     fn draw_node(
         &self,
         frame: &mut Frame,
@@ -408,7 +552,7 @@ impl ASTCanvas {
         let rectangle_size = Size::new(node.width, 30.0);
         let rectangle = Path::rectangle(
             Point::new(
-                coord.x as f32 - node.width / 2.0 + x ,
+                coord.x as f32 - node.width / 2.0 + x,
                 (coord.y as f32 - 15.0) + y,
             ),
             rectangle_size,
@@ -492,7 +636,8 @@ extern crate reingold_tilford;
 pub struct ASTCanvas {
     root: Option<Node>,
     layout: Option<HashMap<usize, reingold_tilford::Coordinate>>,
-    scale: f32,
+    scaling: f32,
+    translation: Vector,
 }
 
 #[derive(Debug, Clone)]

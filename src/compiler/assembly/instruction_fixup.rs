@@ -80,7 +80,19 @@ fn fixup_instruction (instruction: AssemblyInstruction) -> Vec<AssemblyInstructi
                     AssemblyOperand::Reg(AssemblyRegister::R11),
                     AssemblyOperand::Stack(stack)),
             ]
-        }
+        },
+        AssemblyInstruction::Cmp(src, dst @ AssemblyOperand::Imm(_)) => {
+            vec![
+                AssemblyInstruction::Mov(dst, AssemblyOperand::Reg(AssemblyRegister::R11)),
+                AssemblyInstruction::Cmp(src, AssemblyOperand::Reg(AssemblyRegister::R11))
+            ]
+        },
+        AssemblyInstruction::Cmp(src, dst) => {
+            vec![
+                AssemblyInstruction::Mov(src, AssemblyOperand::Reg(AssemblyRegister::R10)),
+                AssemblyInstruction::Cmp(AssemblyOperand::Reg(AssemblyRegister::R10), dst)
+            ]
+        },
         other => vec![other],
     }
 }

@@ -1,4 +1,4 @@
-use crate::storage::assembly::{AssemblyBinaryOp, AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister, AssemblyUnaryOp};
+use crate::storage::assembly::{AssemblyBinaryOp, AssemblyCondition, AssemblyFunctionDefinition, AssemblyInstruction, AssemblyOperand, AssemblyProgram, AssemblyRegister, AssemblyUnaryOp};
 
 pub fn emit_assembly(program: AssemblyProgram) -> String {
     let mut result = String::new();
@@ -58,6 +58,21 @@ fn emit_instruction(instruction: AssemblyInstruction) -> String {
         }
         AssemblyInstruction::AllocateStack(num) => {
             result.push_str(format!("\tsubq\t${}, %rsp\n", num).as_str());
+        },
+        AssemblyInstruction::Cmp(operand1, operand2) => {
+            result.push_str(format!("\tcmpl\t{}, {}\n", emit_operand(operand1), emit_operand(operand2)).as_str());
+        },
+        AssemblyInstruction::Jmp(label) => {
+            result.push_str(format!("\tjmp\t.L{}\n", label).as_str());
+        },
+        AssemblyInstruction::JmpCC(condition, label) => {
+            result.push_str(format!("\tj{}\t.L{}\n", emit_condition_code(condition), label).as_str());
+        },
+        AssemblyInstruction::SetCC(condition, operand) => {
+            result.push_str(format!("\tset{}\t{}\n", emit_condition_code(condition), emit_one_byte_operand(operand)).as_str());
+        }
+        AssemblyInstruction::Label(label) => {
+            result.push_str(format!(".L{}:\n",label).as_str());
         }
     }
 
@@ -88,5 +103,28 @@ fn emit_operand(operand: AssemblyOperand) -> String {
         AssemblyOperand::Stack(num) => format!("{}(%rbp)", num),
         AssemblyOperand::Imm(num) => format!("${}", num),
         _ => unreachable!()
+    }
+}
+
+fn emit_one_byte_operand(operand: AssemblyOperand) -> String {
+    match operand {
+        AssemblyOperand::Reg(AssemblyRegister::AX) => "%al".to_string(),
+        AssemblyOperand::Reg(AssemblyRegister::DX) => "%dl".to_string(),
+        AssemblyOperand::Reg(AssemblyRegister::R10) => "%r10b".to_string(),
+        AssemblyOperand::Reg(AssemblyRegister::R11) => "%r11b".to_string(),
+        AssemblyOperand::Stack(num) => format!("{}(%rbp)", num),
+        AssemblyOperand::Imm(num) => format!("${}", num),
+        _ => unreachable!()
+    }
+}
+
+fn emit_condition_code(condition: AssemblyCondition) -> String {
+    match condition {
+        AssemblyCondition::E => "e".to_string(),
+        AssemblyCondition::NE => "ne".to_string(),
+        AssemblyCondition::L => "l".to_string(),
+        AssemblyCondition::LE => "le".to_string(),
+        AssemblyCondition::G => "g".to_string(),
+        AssemblyCondition::GE => "ge".to_string(),
     }
 }

@@ -51,6 +51,9 @@ pub(crate) fn view_editor<'a>(content: &'a Content, word_wrap: bool, file: &'a O
             },
             keyboard::Key::Named(Named::Tab) => {
                 Some(text_editor::Binding::Custom(Message::InsertTab))
+            },
+            keyboard::Key::Character("c") if key_press.modifiers.command() && key_press.modifiers.shift() => {
+                Some(text_editor::Binding::Custom(Message::CompileCode))
             }
             _ => text_editor::Binding::from_key_press(key_press),
         })
