@@ -47,7 +47,7 @@ fn emit_tacky_statement(statement: AstStatement) -> Vec<Instruction> {
             instructions
         }
         AstStatement::Expression(expression) => {
-            let (instructions, var) = emit_tacky_expression(expression);
+            let (instructions, _var) = emit_tacky_expression(expression);
             instructions
         }
         AstStatement::Null => vec![]
@@ -70,7 +70,7 @@ fn emit_tacky_declaration(declaration: AstDeclaration) -> Vec<Instruction> {
 }
 
 fn emit_tacky_expression(expression: AstExpression) -> (Vec<Instruction>, Val) {
-    static VAR_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    pub static VAR_COUNTER: AtomicUsize = AtomicUsize::new(0);
     static AND_COUNTER: AtomicUsize = AtomicUsize::new(0);
     static OR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -183,17 +183,80 @@ fn convert_binary_op(binary_op: AstBinaryOp) -> BinaryOp {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::compiler::tackygen::{emit_tacky_statement};
-//     use crate::compiler::token::Token;
-//     use crate::storage::ast::{AstExpression, AstStatement, AstUnaryOp};
-//     use crate::storage::tacky::{Instruction, UnaryOp, Val};
-//
-//     #[test]
-//     fn basic_test() {
-//         let res = AstStatement::Return(AstExpression::Unary(AstUnaryOp::Negate, Box::new(AstExpression::Unary(AstUnaryOp::Complement, Box::new(AstExpression::Constant(Token::Constant(100)))))));
-//
-//         assert_eq!(emit_tacky_statement(res), vec![AstStatement::Unary(UnaryOp::Complement, Val::Constant(100), Val::Var("tmp.0".to_string())), AstStatement::Unary(UnaryOp::Negate, Val::Var("tmp.0".to_string()), Val::Var("tmp.1".to_string())), AstStatement::Return(Val::Var("tmp.1".to_string()))]);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use crate::compiler::tackygen::{convert_binary_op, convert_unary_op, emit_tacky_expression};
+    use crate::storage::ast::{AstBinaryOp, AstExpression, AstUnaryOp};
+    use crate::storage::tacky::{BinaryOp, Instruction, UnaryOp, Val};
+
+    #[test]
+    fn convert_binary_op_test() {
+        let mut ast_bin_ops = vec![AstBinaryOp::Add, AstBinaryOp::Subtract, AstBinaryOp::Multiply,
+             AstBinaryOp::Divide, AstBinaryOp::Remainder, AstBinaryOp::Equal,
+             AstBinaryOp::NotEqual, AstBinaryOp::LessThan, AstBinaryOp::LessOrEqual,
+            AstBinaryOp::GreaterThan, AstBinaryOp::GreaterOrEqual];
+
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::GreaterOrEqual);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::GreaterThan);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::LessOrEqual);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::LessThan);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::NotEqual);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Equal);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Remainder);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Divide);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Multiply);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Subtract);
+        assert_eq!(convert_binary_op(ast_bin_ops.pop().unwrap()), BinaryOp::Add);
+    }
+
+    #[test]
+    fn convert_unary_op_test() {
+        let mut ast_un_ops = vec![AstUnaryOp::Complement, AstUnaryOp::Negate, AstUnaryOp::Not];
+
+        assert_eq!(convert_unary_op(ast_un_ops.pop().unwrap()), UnaryOp::Not);
+        assert_eq!(convert_unary_op(ast_un_ops.pop().unwrap()), UnaryOp::Negate);
+        assert_eq!(convert_unary_op(ast_un_ops.pop().unwrap()), UnaryOp::Complement);
+    }
+
+    #[test]
+    fn convert_constant_tacky_expression_test() {
+        let expr = AstExpression::Constant(2);
+
+        let (tacky_instructions, val) = emit_tacky_expression(expr);
+
+        assert_eq!(tacky_instructions.len(), 0);
+        assert_eq!(val, Val::Constant(2));
+    }
+
+    #[test]
+    fn convert_simple_unary_tacky_expression_test() {
+        let expr = AstExpression::Unary(AstUnaryOp::Negate, Box::new(AstExpression::Constant(2)));
+
+        let (tacky_instructions, val) = emit_tacky_expression(expr);
+
+        assert_eq!(tacky_instructions.len(), 1);
+        assert_eq!(tacky_instructions[0], Instruction::Unary(UnaryOp::Negate, Val::Constant(2), val));
+    }
+
+
+    #[test]
+    fn convert_simple_binary_tacky_expression_test() {
+        let expr = AstExpression::Binary(AstBinaryOp::Divide, Box::new(AstExpression::Constant(2)), Box::new(AstExpression::Constant(1)));
+
+
+        let (tacky_instructions, val) = emit_tacky_expression(expr);
+
+
+        assert_eq!(tacky_instructions.len(), 1);
+        assert_eq!(tacky_instructions[0], Instruction::Binary(BinaryOp::Divide, Val::Constant(2), Val::Constant(1), val));
+    }
+
+    #[test]
+    fn convert_var_tacky_expression_test() {
+        let expr = AstExpression::Var("some_identifier".to_string());
+
+        let (tacky_instructions, val) = emit_tacky_expression(expr);
+        assert_eq!(tacky_instructions.len(), 0);
+        assert_eq!(val, Val::Var("some_identifier".to_string()));
+    }
+}

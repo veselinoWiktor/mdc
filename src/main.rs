@@ -10,7 +10,7 @@ use crate::compiler::emit::emit_assembly;
 use crate::compiler::parser::parse_program;
 use crate::compiler::tackygen::emit_tacky;
 use crate::compiler::tokenizer::tokenize;
-use crate::ui::run_ui;
+use crate::ui::ast_visualizer::run_ui;
 use compiler::assembly::codegen::gen;
 use std::fs;
 use std::path::PathBuf;

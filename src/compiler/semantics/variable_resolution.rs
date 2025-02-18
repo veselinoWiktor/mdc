@@ -82,7 +82,7 @@ fn resolve_expression(ast_expression: AstExpression, variable_map: &HashMap<Stri
             if variable_map.contains_key(&identifier) {
                 Ok(AstExpression::Var(variable_map.get(&identifier).unwrap().clone()))
             } else {
-                Err(SemanticError::InvalidLValue)
+                Err(SemanticError::UndeclaredVariable)
             }
         },
         AstExpression::Binary(bin_op, left, right) => {

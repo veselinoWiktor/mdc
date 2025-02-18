@@ -117,15 +117,15 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Result<AstStatement, ParserErr> {
     }
     else if tokens.first() == Some(&Token::Semicolon) {
         tokens.remove(0);
-        
+
         Ok(AstStatement::Null)
     }
     else {
         let expression = parse_expression(tokens, 0)?;
-        
+
         expect(&Token::Semicolon, tokens)?;
         tokens.remove(0);
-        
+
         Ok(AstStatement::Expression(expression))
     }
 }
@@ -399,7 +399,7 @@ mod tests {
             statement,
             Err(ParserErr(format!(
                 "expected {:?}, got {:?}",
-                &Token::Return,
+                &Token::Constant(0),
                 tokens.first().unwrap()
             )))
         );
@@ -411,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_statement_fail_with_incorrect_token() {
+    fn parse_statement_pass_with_correct_tokens() {
         let mut tokens = vec![
             Token::Return,
             Token::Identifier("main".to_string()),
@@ -421,18 +421,14 @@ mod tests {
         let statement = parse_statement(&mut tokens);
 
         assert_eq!(
-            statement,
-            Err(ParserErr(format!(
-                "expected {:?}, got {:?}",
-                &Token::Constant(0),
-                tokens.first().unwrap()
-            )))
+            statement.unwrap(),
+            AstStatement::Return(AstExpression::Var("main".to_string()))
         );
         assert_eq!(
             tokens,
-            vec![Token::Identifier("main".to_string()), Token::Semicolon]
+            vec![]
         );
-        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens.len(), 0);
     }
 
     #[test]

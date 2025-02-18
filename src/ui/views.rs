@@ -5,7 +5,8 @@ use iced::{highlighter, keyboard, Element, Fill};
 use iced::keyboard::key::Named;
 use iced::widget::{button, canvas, center, center_x, container, text, text_editor, tooltip};
 use iced::widget::text_editor::Content;
-use crate::ui::{ASTCanvas, Message};
+use crate::ui::ast_canvas_converter::ASTCanvas;
+use crate::ui::ast_visualizer::Message;
 use crate::ui::loader::{Circular, STANDARD};
 
 pub(crate) fn action<'a, Message: Clone + 'a>(

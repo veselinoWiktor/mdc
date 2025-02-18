@@ -1,11 +1,10 @@
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum Error {
     DialogClosed,
-    IoError(io::ErrorKind),
+    IoError,
 }
 
 pub(crate) async fn open_file() -> Result<(PathBuf, Arc<String>), Error> {
@@ -24,7 +23,7 @@ async fn load_file(path: impl Into<PathBuf>) -> Result<(PathBuf, Arc<String>), E
     let contents = tokio::fs::read_to_string(&path)
         .await
         .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
+        .map_err(|_| Error::IoError)?;
 
     Ok((path, contents))
 }
@@ -44,7 +43,7 @@ pub(crate) async fn save_file(path: Option<PathBuf>, contents: String) -> Result
 
     tokio::fs::write(&path, contents)
         .await
-        .map_err(|error| Error::IoError(error.kind()))?;
+        .map_err(|_| Error::IoError)?;
 
     Ok(path)
 }
